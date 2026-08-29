@@ -196,6 +196,11 @@
     color:var(--ink);
   }
   .name-inputs input:focus-visible{ outline:2px solid var(--coral); }
+  .name-inputs input.invalid{
+    border-color:var(--coral);
+    box-shadow:0 0 0 2px rgba(255,107,87,0.25);
+  }
+  .name-inputs input.invalid::placeholder{ color:var(--coral); }
   .amp{ font-family:'Archivo Black',sans-serif; color:var(--navy); font-size:16px; }
 
   /* ---------- SCREEN 3: game ---------- */
@@ -600,19 +605,54 @@
     }
   }
 
+  function getNameInputs(){
+    if(state.mode === 'solo'){
+      return [document.getElementById('solo-0'), document.getElementById('solo-1')];
+    }
+    const pairCount = state.numPlayers / 2;
+    const inputs = [];
+    for(let i=0;i<pairCount;i++){
+      inputs.push(document.getElementById(`p${i}-a`), document.getElementById(`p${i}-b`));
+    }
+    return inputs;
+  }
+
+  function validateNameInputs(){
+    const inputs = getNameInputs();
+    let firstInvalid = null;
+    inputs.forEach(inp=>{
+      const empty = inp.value.trim() === '';
+      inp.classList.toggle('invalid', empty);
+      if(empty && !firstInvalid) firstInvalid = inp;
+    });
+    return firstInvalid; // null if all valid
+  }
+
+  pairInputsEl.addEventListener('input', (e)=>{
+    if(e.target.tagName === 'INPUT' && e.target.value.trim() !== ''){
+      e.target.classList.remove('invalid');
+    }
+  });
+
   document.getElementById('startGameBtn').addEventListener('click', ()=>{
+    const firstInvalid = validateNameInputs();
+    if(firstInvalid){
+      showToast('Please enter a name for every player');
+      firstInvalid.focus();
+      return;
+    }
     state.units = [];
     if(state.mode === 'solo'){
       for(let i=0;i<2;i++){
-        const name = document.getElementById(`solo-${i}`).value.trim() || `Player ${i+1}`;
+        const name = document.getElementById(`solo-${i}`).value.trim();
         state.units.push({ label:name, score:0 });
       }
       state.askerIndex = 0;
     } else {
       const pairCount = state.numPlayers / 2;
       for(let i=0;i<pairCount;i++){
-        const a = document.getElementById(`p${i}-a`).value.trim() || `Player ${i*2+1}`;
-        const b = document.getElementById(`p${i}-b`).value.trim() || `Player ${i*2+2}`;
+        const a = document.getElementById(`p${i}-a`).value.trim();
+        const b = document.getElementById(`p${i}-b`).value.trim();
         state.units.push({ label:`${a} & ${b}`, score:0 });
       }
       state.currentIndex = 0;
