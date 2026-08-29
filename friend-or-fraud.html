@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Friend or Fraud — Game Companion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --lime:#CBDB2A;
+    --lime-deep:#AEC220;
+    --lime-pale:#E4EE8C;
+    --navy:#1B2A4C;
+    --navy-2:#243863;
+    --ink:#10182B;
+    --paper:#FFFCF2;
+    --coral:#FF6B57;
+    --line:#10182B;
+    --shadow-off: 5px 5px 0 var(--ink);
+    --shadow-off-sm: 3px 3px 0 var(--ink);
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    font-family:'Poppins', sans-serif;
+    background:
+      radial-gradient(circle, rgba(16,24,43,0.08) 1.6px, transparent 1.6px) 0 0/22px 22px,
+      var(--lime);
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:24px 14px 60px;
+  }
+
+  .phone{
+    width:100%;
+    max-width:460px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+
+  /* ---------- shared bits ---------- */
+  .eyebrow{
+    font-family:'Poppins',sans-serif;
+    font-weight:800;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    font-size:12px;
+    color:var(--navy);
+    background:var(--paper);
+    border:2.5px solid var(--line);
+    box-shadow:var(--shadow-off-sm);
+    display:inline-block;
+    padding:5px 12px;
+    border-radius:999px;
+  }
+
+  .display{
+    font-family:'Archivo Black', sans-serif;
+    text-transform:uppercase;
+    line-height:1.02;
+    color:var(--navy);
+    letter-spacing:.01em;
+  }
+
+  .card{
+    background:var(--paper);
+    border:3px solid var(--line);
+    border-radius:26px;
+    box-shadow:var(--shadow-off);
+    padding:22px;
+  }
+
+  button{ font-family:inherit; cursor:pointer; }
+  .btn{
+    font-family:'Archivo Black', sans-serif;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    font-size:16px;
+    color:var(--paper);
+    background:var(--navy);
+    border:3px solid var(--line);
+    border-radius:16px;
+    box-shadow:var(--shadow-off-sm);
+    padding:15px 18px;
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .btn:hover{ transform:translate(-2px,-2px); box-shadow:6px 6px 0 var(--ink); }
+  .btn:active{ transform:translate(1px,1px); box-shadow:1px 1px 0 var(--ink); }
+  .btn:focus-visible{ outline:3px solid var(--coral); outline-offset:2px; }
+  .btn.ghost{ background:var(--paper); color:var(--navy); }
+  .btn.coral{ background:var(--coral); }
+  .btn.full{ width:100%; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; transform:none !important; box-shadow:var(--shadow-off-sm) !important; }
+
+  .row{ display:flex; gap:10px; }
+  .wrap{ display:flex; flex-wrap:wrap; gap:10px; }
+
+  .hidden{ display:none !important; }
+
+  /* ---------- header / logo ---------- */
+  .brandbar{
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .logo{
+    font-family:'Archivo Black', sans-serif;
+    background:var(--navy);
+    color:var(--lime);
+    padding:6px 14px 8px;
+    border-radius:8px;
+    border:3px solid var(--line);
+    box-shadow:var(--shadow-off-sm);
+    font-size:20px;
+    transform:rotate(-3deg);
+    display:inline-block;
+  }
+  .end-btn{
+    font-family:'Poppins',sans-serif;
+    font-weight:700;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    background:var(--paper);
+    color:var(--navy);
+    border:2.5px solid var(--line);
+    border-radius:999px;
+    padding:9px 14px;
+    box-shadow:var(--shadow-off-sm);
+  }
+  .end-btn:hover{ background:var(--coral); color:var(--paper); }
+
+  /* ---------- SCREEN 1: player count ---------- */
+  #screen-count h1{ font-size:34px; margin:6px 0 4px; }
+  #screen-count p.sub{ margin:0 0 18px; font-weight:500; color:var(--navy-2); }
+
+  .count-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:12px;
+    margin-bottom:20px;
+  }
+  .count-btn{
+    aspect-ratio:1;
+    border:3px solid var(--line);
+    border-radius:18px;
+    background:var(--paper);
+    box-shadow:var(--shadow-off-sm);
+    font-family:'Archivo Black',sans-serif;
+    font-size:26px;
+    color:var(--navy);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:2px;
+    transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+  }
+  .count-btn span{ font-family:'Poppins',sans-serif; font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; opacity:.7; }
+  .count-btn:hover{ transform:translate(-2px,-2px); box-shadow:6px 6px 0 var(--ink); }
+  .count-btn.selected{ background:var(--navy); color:var(--lime); }
+  .count-btn.selected span{ color:var(--lime-pale); opacity:.85; }
+
+  /* ---------- SCREEN 2: names ---------- */
+  .pair-card{
+    border:2.5px solid var(--line);
+    border-radius:18px;
+    padding:14px;
+    margin-bottom:12px;
+    background:repeating-linear-gradient(135deg, var(--lime-pale), var(--lime-pale) 10px, var(--paper) 10px, var(--paper) 20px);
+  }
+  .pair-card .pair-label{
+    font-family:'Archivo Black',sans-serif;
+    font-size:12px;
+    color:var(--navy);
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin-bottom:8px;
+    display:block;
+  }
+  .name-inputs{ display:flex; align-items:center; gap:8px; }
+  .name-inputs input{
+    flex:1;
+    min-width:0;
+    font-family:'Poppins',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    padding:10px 12px;
+    border:2px solid var(--line);
+    border-radius:10px;
+    background:var(--paper);
+    color:var(--ink);
+  }
+  .name-inputs input:focus-visible{ outline:2px solid var(--coral); }
+  .amp{ font-family:'Archivo Black',sans-serif; color:var(--navy); font-size:16px; }
+
+  /* ---------- SCREEN 3: game ---------- */
+  .scoreboard{ display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; }
+  .chip{
+    flex:0 0 auto;
+    background:var(--paper);
+    border:2.5px solid var(--line);
+    border-radius:999px;
+    padding:8px 14px;
+    font-weight:700;
+    font-size:12px;
+    color:var(--navy);
+    white-space:nowrap;
+    box-shadow:2px 2px 0 var(--ink);
+  }
+  .chip b{ font-family:'Archivo Black',sans-serif; margin-left:6px; }
+  .chip.active{ background:var(--navy); color:var(--lime); border-color:var(--line); }
+  .chip.active b{ color:var(--lime-pale); }
+
+  .turn-banner{
+    text-align:center;
+    margin:2px 0 6px;
+  }
+  .turn-banner .eyebrow{ margin-bottom:8px; }
+  .turn-banner h2{
+    font-family:'Archivo Black',sans-serif;
+    color:var(--navy);
+    font-size:24px;
+    margin:0;
+    text-transform:none;
+  }
+  .turn-sub{
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--navy-2);
+    margin:6px 0 0;
+  }
+  .role-tag{
+    font-size:10px;
+    font-weight:800;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+  }
+
+  .wheel-zone{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:6px 0 4px;
+  }
+  .pointer{
+    width:0; height:0;
+    border-left:14px solid transparent;
+    border-right:14px solid transparent;
+    border-top:20px solid var(--coral);
+    filter:drop-shadow(0 2px 0 var(--ink));
+    margin-bottom:-6px;
+    z-index:3;
+  }
+  .wheel-outer{
+    width:250px; height:250px;
+    border-radius:50%;
+    border:5px solid var(--line);
+    box-shadow:var(--shadow-off);
+    position:relative;
+    background:var(--paper);
+    overflow:hidden;
+  }
+  .wheel-inner{
+    position:absolute; inset:0;
+    border-radius:50%;
+    transition: transform 4.2s cubic-bezier(.17,.85,.15,1);
+    transform:rotate(0deg);
+    background:conic-gradient(var(--navy) 0deg 72deg, var(--paper) 72deg 144deg, var(--navy) 144deg 216deg, var(--paper) 216deg 288deg, var(--navy) 288deg 360deg);
+  }
+  .wheel-inner .seg-icon{
+    position:absolute;
+    left:50%; top:50%;
+    width:34px; height:34px;
+    margin:-17px 0 0 -17px;
+    font-size:26px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .hub{
+    position:absolute; left:50%; top:50%; width:46px; height:46px;
+    margin:-23px 0 0 -23px;
+    background:var(--coral);
+    border:3px solid var(--line);
+    border-radius:50%;
+    z-index:2;
+  }
+
+  .spin-btn{ margin-top:16px; width:100%; }
+
+  .category-reveal{
+    margin-top:16px;
+    text-align:center;
+  }
+  .category-reveal .icon{ font-size:34px; }
+  .category-reveal h3{
+    font-family:'Archivo Black',sans-serif;
+    color:var(--navy);
+    font-size:20px;
+    margin:6px 0 6px;
+    text-transform:uppercase;
+  }
+  .category-reveal p{
+    margin:0 0 14px;
+    font-size:13.5px;
+    color:var(--navy-2);
+    font-weight:500;
+    line-height:1.45;
+  }
+  .hint{
+    display:inline-block;
+    font-size:11.5px;
+    font-weight:700;
+    color:var(--navy);
+    background:var(--lime-pale);
+    border:2px solid var(--line);
+    border-radius:999px;
+    padding:6px 12px;
+    margin-bottom:16px;
+  }
+
+  .verdict-row{ display:flex; gap:10px; }
+  .verdict-row .btn{ flex:1; font-size:14px; }
+
+  .toast{
+    position:fixed;
+    left:50%; bottom:26px;
+    transform:translateX(-50%) translateY(20px);
+    opacity:0;
+    background:var(--navy);
+    color:var(--lime-pale);
+    font-family:'Archivo Black',sans-serif;
+    font-size:14px;
+    padding:12px 20px;
+    border-radius:14px;
+    border:3px solid var(--line);
+    box-shadow:var(--shadow-off-sm);
+    transition:all .25s ease;
+    z-index:50;
+    text-align:center;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ---------- SCREEN 4: results ---------- */
+  #screen-results{ text-align:center; position:relative; }
+  #screen-results h1{ font-size:32px; margin:4px 0 2px; }
+  #screen-results .sub{ color:var(--navy-2); font-weight:500; margin-bottom:18px; }
+
+  .leaderboard{ display:flex; flex-direction:column; gap:10px; margin-bottom:20px; }
+  .lb-row{
+    display:flex; align-items:center; gap:12px;
+    border:2.5px solid var(--line);
+    border-radius:16px;
+    padding:12px 14px;
+    background:var(--paper);
+    text-align:left;
+  }
+  .lb-row.winner{ background:var(--navy); border-color:var(--line); box-shadow:var(--shadow-off-sm); }
+  .lb-rank{ font-family:'Archivo Black',sans-serif; font-size:18px; color:var(--navy); width:26px; }
+  .lb-row.winner .lb-rank{ color:var(--lime); }
+  .lb-name{ flex:1; font-weight:700; font-size:14px; color:var(--ink); }
+  .lb-row.winner .lb-name{ color:var(--paper); }
+  .lb-score{ font-family:'Archivo Black',sans-serif; font-size:18px; color:var(--navy); }
+  .lb-row.winner .lb-score{ color:var(--lime-pale); }
+
+  .confetti-piece{
+    position:fixed; top:-20px;
+    width:10px; height:14px;
+    z-index:5;
+    animation:fall linear forwards;
+    border-radius:2px;
+  }
+  @keyframes fall{
+    to{ transform:translateY(110vh) rotate(540deg); opacity:.9; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .wheel-inner{ transition:none; }
+    .confetti-piece{ animation:none; display:none; }
+    .btn, .count-btn{ transition:none; }
+  }
+
+  footer.note{
+    text-align:center;
+    font-size:11.5px;
+    color:var(--navy-2);
+    font-weight:600;
+    opacity:.75;
+    margin-top:4px;
+  }
+</style>
+</head>
+<body>
+
+<div class="phone">
+
+  <div class="brandbar">
+    <div class="logo">ZAG</div>
+    <button class="end-btn hidden" id="endGameTopBtn">End Game</button>
+  </div>
+
+  <!-- SCREEN 1: how many players -->
+  <section id="screen-count" class="card">
+    <span class="eyebrow">Friend or Fraud</span>
+    <h1 class="display">How many<br>are playing?</h1>
+    <p class="sub">Pick a headcount — you'll be split into pairs.</p>
+    <div class="count-grid" id="countGrid"></div>
+    <button class="btn full" id="toNamesBtn" disabled>Next: Name your pairs →</button>
+  </section>
+
+  <!-- SCREEN 2: names -->
+  <section id="screen-names" class="card hidden">
+    <span class="eyebrow">Friend or Fraud</span>
+    <h1 class="display" style="font-size:28px;margin:6px 0 4px;" id="namesTitle">Name your pairs</h1>
+    <p class="sub" style="margin-bottom:16px;" id="namesSub">Each pair shares one dry-erase card and tries to match answers.</p>
+    <div id="pairInputs"></div>
+    <button class="btn full" id="startGameBtn">Start Game →</button>
+  </section>
+
+  <!-- SCREEN 3: game -->
+  <section id="screen-game" class="hidden">
+    <div class="scoreboard" id="scoreboard"></div>
+
+    <div class="card" style="margin-top:14px;">
+      <div class="turn-banner">
+        <span class="eyebrow" id="turnCountLabel">Turn 1</span>
+        <h2 id="turnPairName">— & —</h2>
+        <p class="turn-sub hidden" id="turnSub"></p>
+      </div>
+
+      <div class="wheel-zone">
+        <div class="pointer"></div>
+        <div class="wheel-outer">
+          <div class="wheel-inner" id="wheelInner"></div>
+          <div class="hub"></div>
+        </div>
+        <button class="btn spin-btn" id="spinBtn">🎡 Spin for a category</button>
+      </div>
+
+      <div class="category-reveal hidden" id="categoryReveal">
+        <div class="icon" id="revealIcon">🔍</div>
+        <h3 id="revealName">Category</h3>
+        <p id="revealDesc">Description</p>
+        <div class="hint" id="revealHint">📇 Draw a card from this category & ask away</div>
+        <div class="verdict-row">
+          <button class="btn full" id="matchBtn">✅ It's a Match (+1)</button>
+          <button class="btn ghost full" id="noMatchBtn">❌ No Match</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="note">Answers don't match? The card goes back to the bottom of the deck.</footer>
+  </section>
+
+  <!-- SCREEN 4: results -->
+  <section id="screen-results" class="card hidden">
+    <span class="eyebrow">Game Over</span>
+    <h1 class="display">Results are in!</h1>
+    <p class="sub" id="resultsSub">Here's who really knows who.</p>
+    <div class="leaderboard" id="leaderboard"></div>
+    <button class="btn full" id="playAgainBtn">↺ Play Again</button>
+  </section>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const CATEGORIES = [
+    { name:"Background Check", icon:"🔍", desc:"Stay safe and keep it broad — the basics, the vanilla, the general stuff about them." },
+    { name:"The Psyche", icon:"🧠", desc:"A personality check. Get personal — how they think, how they feel, how they behave." },
+    { name:"The Norm", icon:"☕", desc:"Good habits, bad habits, daily routines — how they carry themselves day to day." },
+    { name:"The Social", icon:"👥", desc:"Friends, closeness, and how they connect with the people around them." },
+    { name:"Between Me & You", icon:"💬", desc:"Puts you two in the spotlight — questions that test you against each other. Skip this one in Alternative Mode." }
+  ];
+
+  const state = {
+    numPlayers: null,
+    mode: 'team',     // 'team' (4+ players, paired up) or 'solo' (exactly 2, individual)
+    units: [],        // { label, score } — a pair-team in team mode, a single player in solo mode
+    currentIndex: 0,  // team mode: whose turn it is
+    askerIndex: 0,    // solo mode: who currently answers for real (the other one guesses)
+    turnCount: 1,
+    lastCategoryIndex: null,
+    revealVisible: false,
+    wheelRotation: 0,
+    spinning: false,
+    screen: 'count'
+  };
+
+  const STORAGE_KEY = 'friendOrFraud_save_v1';
+
+  function saveGame(){
+    try{
+      if(state.screen === 'game'){
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }catch(e){ /* storage unavailable (private mode etc.) — game still works, just won't survive a refresh */ }
+  }
+
+  function loadSavedGame(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return null;
+      const saved = JSON.parse(raw);
+      if(saved && Array.isArray(saved.units) && saved.units.length > 0) return saved;
+      return null;
+    }catch(e){ return null; }
+  }
+
+  function clearSavedGame(){
+    try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+  }
+
+  // ---------- element refs ----------
+  const screens = {
+    count: document.getElementById('screen-count'),
+    names: document.getElementById('screen-names'),
+    game: document.getElementById('screen-game'),
+    results: document.getElementById('screen-results')
+  };
+  const endGameTopBtn = document.getElementById('endGameTopBtn');
+  const toast = document.getElementById('toast');
+
+  function showScreen(name){
+    Object.values(screens).forEach(s=>s.classList.add('hidden'));
+    screens[name].classList.remove('hidden');
+    endGameTopBtn.classList.toggle('hidden', name !== 'game');
+    state.screen = name;
+    saveGame();
+  }
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(()=> toast.classList.remove('show'), 1400);
+  }
+
+  // ---------- SCREEN 1 ----------
+  const countGrid = document.getElementById('countGrid');
+  const toNamesBtn = document.getElementById('toNamesBtn');
+  [2,4,6,8,10,12].forEach(n=>{
+    const b = document.createElement('button');
+    b.className = 'count-btn';
+    b.innerHTML = `${n}<span>${n===2? 'player':'players'}</span>`;
+    b.addEventListener('click', ()=>{
+      document.querySelectorAll('.count-btn').forEach(x=>x.classList.remove('selected'));
+      b.classList.add('selected');
+      state.numPlayers = n;
+      state.mode = (n === 2) ? 'solo' : 'team';
+      toNamesBtn.disabled = false;
+    });
+    countGrid.appendChild(b);
+  });
+
+  toNamesBtn.addEventListener('click', ()=>{
+    buildNameInputs();
+    showScreen('names');
+  });
+
+  // ---------- SCREEN 2 ----------
+  const pairInputsEl = document.getElementById('pairInputs');
+  function buildNameInputs(){
+    pairInputsEl.innerHTML = '';
+    if(state.mode === 'solo'){
+      document.getElementById('namesTitle').textContent = 'Name the players';
+      document.getElementById('namesSub').textContent = 'Just the two of you — you\'ll take turns being the one who answers and the one who guesses.';
+      for(let i=0;i<2;i++){
+        const div = document.createElement('div');
+        div.className = 'pair-card';
+        div.innerHTML = `
+          <span class="pair-label">Player ${i+1}</span>
+          <div class="name-inputs">
+            <input type="text" maxlength="18" placeholder="Player ${i+1}" id="solo-${i}">
+          </div>`;
+        pairInputsEl.appendChild(div);
+      }
+    } else {
+      document.getElementById('namesTitle').textContent = 'Name your pairs';
+      document.getElementById('namesSub').textContent = 'Each pair shares one dry-erase card and tries to match answers.';
+      const pairCount = state.numPlayers / 2;
+      for(let i=0;i<pairCount;i++){
+        const div = document.createElement('div');
+        div.className = 'pair-card';
+        div.innerHTML = `
+          <span class="pair-label">Pair ${i+1}</span>
+          <div class="name-inputs">
+            <input type="text" maxlength="16" placeholder="Player ${i*2+1}" id="p${i}-a">
+            <span class="amp">&amp;</span>
+            <input type="text" maxlength="16" placeholder="Player ${i*2+2}" id="p${i}-b">
+          </div>`;
+        pairInputsEl.appendChild(div);
+      }
+    }
+  }
+
+  document.getElementById('startGameBtn').addEventListener('click', ()=>{
+    state.units = [];
+    if(state.mode === 'solo'){
+      for(let i=0;i<2;i++){
+        const name = document.getElementById(`solo-${i}`).value.trim() || `Player ${i+1}`;
+        state.units.push({ label:name, score:0 });
+      }
+      state.askerIndex = 0;
+    } else {
+      const pairCount = state.numPlayers / 2;
+      for(let i=0;i<pairCount;i++){
+        const a = document.getElementById(`p${i}-a`).value.trim() || `Player ${i*2+1}`;
+        const b = document.getElementById(`p${i}-b`).value.trim() || `Player ${i*2+2}`;
+        state.units.push({ label:`${a} & ${b}`, score:0 });
+      }
+      state.currentIndex = 0;
+    }
+    state.turnCount = 1;
+    buildWheel();
+    renderScoreboard();
+    renderTurnBanner();
+    showScreen('game');
+  });
+
+  // ---------- SCREEN 3: wheel ----------
+  const wheelInner = document.getElementById('wheelInner');
+  function buildWheel(){
+    wheelInner.innerHTML = '';
+    const R = 82;
+    CATEGORIES.forEach((cat, k)=>{
+      const angle = k*72 + 36;
+      const rad = (angle * Math.PI)/180;
+      const x = Math.sin(rad)*R;
+      const y = -Math.cos(rad)*R;
+      const el = document.createElement('div');
+      el.className = 'seg-icon';
+      el.style.transform = `translate(${x}px, ${y}px)`;
+      el.textContent = cat.icon;
+      wheelInner.appendChild(el);
+    });
+  }
+
+  function renderScoreboard(){
+    const el = document.getElementById('scoreboard');
+    el.innerHTML = '';
+    state.units.forEach((unit, i)=>{
+      const chip = document.createElement('div');
+      let isActive, roleTag = '';
+      if(state.mode === 'solo'){
+        isActive = (i === state.askerIndex);
+        roleTag = i === state.askerIndex ? '🎙️ ' : '🤔 ';
+      } else {
+        isActive = (i === state.currentIndex);
+      }
+      chip.className = 'chip' + (isActive ? ' active' : '');
+      chip.innerHTML = `${roleTag}${unit.label}<b>${unit.score}</b>`;
+      el.appendChild(chip);
+    });
+  }
+
+  function renderTurnBanner(){
+    document.getElementById('turnCountLabel').textContent = `Turn ${state.turnCount}`;
+    const turnSub = document.getElementById('turnSub');
+    if(state.mode === 'solo'){
+      const asker = state.units[state.askerIndex];
+      const guesser = state.units[1 - state.askerIndex];
+      document.getElementById('turnPairName').textContent = `${asker.label} vs ${guesser.label}`;
+      turnSub.textContent = `🎙️ ${asker.label} answers for real · 🤔 ${guesser.label} guesses`;
+      turnSub.classList.remove('hidden');
+    } else {
+      const unit = state.units[state.currentIndex];
+      document.getElementById('turnPairName').textContent = unit.label;
+      turnSub.classList.add('hidden');
+    }
+    document.getElementById('categoryReveal').classList.add('hidden');
+    document.getElementById('spinBtn').disabled = false;
+    document.getElementById('spinBtn').textContent = '🎡 Spin for a category';
+    state.revealVisible = false;
+    saveGame();
+  }
+
+  const spinBtn = document.getElementById('spinBtn');
+  spinBtn.addEventListener('click', spinWheel);
+
+  function spinWheel(){
+    if(state.spinning) return;
+    state.spinning = true;
+    spinBtn.disabled = true;
+    spinBtn.textContent = 'Spinning…';
+    document.getElementById('categoryReveal').classList.add('hidden');
+
+    const i = Math.floor(Math.random()*CATEGORIES.length);
+    state.lastCategoryIndex = i;
+    const segCenter = i*72 + 36;
+    let targetMod = ((-segCenter) % 360 + 360) % 360;
+    const jitter = (Math.random()*30 - 15);
+    targetMod = ((targetMod + jitter) % 360 + 360) % 360;
+
+    const extraSpins = 4 + Math.floor(Math.random()*2);
+    const minRotation = state.wheelRotation + extraSpins*360;
+    const remainder = ((targetMod - minRotation) % 360 + 360) % 360;
+    const finalRotation = minRotation + remainder;
+    state.wheelRotation = finalRotation;
+    wheelInner.style.transform = `rotate(${finalRotation}deg)`;
+
+    setTimeout(()=>{
+      revealCategory(i);
+      state.spinning = false;
+      saveGame();
+    }, 4300);
+  }
+
+  function revealCategory(i){
+    const cat = CATEGORIES[i];
+    document.getElementById('revealIcon').textContent = cat.icon;
+    document.getElementById('revealName').textContent = cat.name;
+    document.getElementById('revealDesc').textContent = cat.desc;
+    state.revealVisible = true;
+
+    const hintEl = document.getElementById('revealHint');
+    const matchBtn = document.getElementById('matchBtn');
+    if(state.mode === 'solo'){
+      const asker = state.units[state.askerIndex];
+      const guesser = state.units[1 - state.askerIndex];
+      hintEl.textContent = `📇 ${asker.label} draws a card & answers honestly — ${guesser.label} writes a guess`;
+      matchBtn.textContent = `✅ ${guesser.label} guessed right (+1)`;
+    } else {
+      hintEl.textContent = '📇 Draw a card from this category & ask away';
+      matchBtn.textContent = "✅ It's a Match (+1)";
+    }
+
+    document.getElementById('categoryReveal').classList.remove('hidden');
+    spinBtn.textContent = '🎡 Spin for a category';
+  }
+
+  document.getElementById('matchBtn').addEventListener('click', ()=> resolveTurn(true));
+  document.getElementById('noMatchBtn').addEventListener('click', ()=> resolveTurn(false));
+
+  function resolveTurn(isMatch){
+    if(state.mode === 'solo'){
+      const guesserIndex = 1 - state.askerIndex;
+      const guesser = state.units[guesserIndex];
+      if(isMatch){
+        guesser.score += 1;
+        showToast(`✅ Point for ${guesser.label}!`);
+      } else {
+        showToast('❌ No match — card goes to the bottom of the deck');
+      }
+    } else {
+      const unit = state.units[state.currentIndex];
+      if(isMatch){
+        unit.score += 1;
+        showToast(`✅ Point for ${unit.label}!`);
+      } else {
+        showToast('❌ No match — card goes to the bottom of the deck');
+      }
+    }
+    renderScoreboard();
+    document.getElementById('spinBtn').disabled = true;
+    saveGame();
+
+    setTimeout(()=>{
+      if(state.mode === 'solo'){
+        state.askerIndex = 1 - state.askerIndex;
+      } else {
+        state.currentIndex = (state.currentIndex + 1) % state.units.length;
+      }
+      state.turnCount += 1;
+      renderScoreboard();
+      renderTurnBanner();
+    }, 900);
+  }
+
+  // ---------- END GAME ----------
+  let pendingEnd = false;
+  endGameTopBtn.addEventListener('click', ()=>{
+    if(!pendingEnd){
+      pendingEnd = true;
+      endGameTopBtn.textContent = 'Sure? Tap again';
+      setTimeout(()=>{ pendingEnd = false; endGameTopBtn.textContent = 'End Game'; }, 2500);
+      return;
+    }
+    pendingEnd = false;
+    endGameTopBtn.textContent = 'End Game';
+    endGame();
+  });
+
+  function endGame(){
+    const sorted = [...state.units].sort((a,b)=> b.score - a.score);
+    const topScore = sorted.length ? sorted[0].score : 0;
+    const el = document.getElementById('leaderboard');
+    el.innerHTML = '';
+    sorted.forEach((unit, idx)=>{
+      const isWinner = unit.score === topScore && topScore > 0;
+      const row = document.createElement('div');
+      row.className = 'lb-row' + (isWinner ? ' winner' : '');
+      row.innerHTML = `
+        <span class="lb-rank">${isWinner ? '🏆' : (idx+1)}</span>
+        <span class="lb-name">${unit.label}</span>
+        <span class="lb-score">${unit.score} pt${unit.score===1?'':'s'}</span>`;
+      el.appendChild(row);
+    });
+    const winners = sorted.filter(u=>u.score===topScore && topScore>0).map(u=>u.label);
+    document.getElementById('resultsSub').textContent = winners.length
+      ? (winners.length>1 ? `It's a tie between ${winners.join(' and ')}!` : `${winners[0]} knows their people best!`)
+      : 'No points scored this round — rematch?';
+    showScreen('results');
+    clearSavedGame();
+    if(winners.length) launchConfetti();
+  }
+
+  function launchConfetti(){
+    const colors = ['#1B2A4C','#FF6B57','#FFFCF2','#AEC220'];
+    for(let i=0;i<40;i++){
+      const piece = document.createElement('div');
+      piece.className = 'confetti-piece';
+      piece.style.left = Math.random()*100 + 'vw';
+      piece.style.background = colors[Math.floor(Math.random()*colors.length)];
+      piece.style.animationDuration = (2.2 + Math.random()*1.6) + 's';
+      piece.style.animationDelay = (Math.random()*0.4) + 's';
+      document.body.appendChild(piece);
+      setTimeout(()=> piece.remove(), 4200);
+    }
+  }
+
+  document.getElementById('playAgainBtn').addEventListener('click', ()=>{
+    state.numPlayers = null;
+    state.mode = 'team';
+    state.units = [];
+    state.currentIndex = 0;
+    state.askerIndex = 0;
+    state.turnCount = 1;
+    state.wheelRotation = 0;
+    document.querySelectorAll('.count-btn').forEach(x=>x.classList.remove('selected'));
+    toNamesBtn.disabled = true;
+    showScreen('count');
+  });
+
+  function restoreOrInit(){
+    const saved = loadSavedGame();
+    if(saved && saved.screen === 'game'){
+      const wasRevealVisible = !!saved.revealVisible;
+      const savedCategoryIndex = saved.lastCategoryIndex;
+      Object.assign(state, saved);
+      buildWheel();
+      wheelInner.style.transition = 'none';
+      wheelInner.style.transform = `rotate(${state.wheelRotation || 0}deg)`;
+      void wheelInner.offsetWidth; // force reflow so the transition-none takes effect
+      wheelInner.style.transition = '';
+      renderScoreboard();
+      renderTurnBanner();
+      if(wasRevealVisible && savedCategoryIndex !== null && savedCategoryIndex !== undefined){
+        revealCategory(savedCategoryIndex);
+        spinBtn.disabled = true;
+      }
+      showScreen('game');
+      showToast('Welcome back — picked up right where you left off');
+    } else {
+      showScreen('count');
+    }
+  }
+
+  restoreOrInit();
+})();
+</script>
+</body>
+</html>
