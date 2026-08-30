@@ -59,7 +59,8 @@
     count: document.getElementById('screen-count'),
     names: document.getElementById('screen-names'),
     game: document.getElementById('screen-game'),
-    results: document.getElementById('screen-results')
+    results: document.getElementById('screen-results'),
+    howto: document.getElementById('screen-howto')
   };
   const endGameTopBtn = document.getElementById('endGameTopBtn');
   const toast = document.getElementById('toast');
@@ -102,6 +103,20 @@
 
   // ---------- SCREEN 0: menu + generic back buttons ----------
   document.getElementById('goSoloBtn').addEventListener('click', ()=> showScreen('count'));
+  document.getElementById('goHowToBtn').addEventListener('click', ()=> showScreen('howto'));
+
+  // build the category list on the How to Play screen from the real deck
+  (function fillHowToCats(){
+    const wrap = document.getElementById('howtoCats');
+    if(!wrap) return;
+    CATEGORIES.forEach(cat=>{
+      const row = document.createElement('div');
+      row.className = 'howto-cat';
+      row.innerHTML = `<span class="howto-cat-icon">${cat.icon}</span>` +
+                      `<div><b>${cat.name}</b><p>${cat.desc}</p></div>`;
+      wrap.appendChild(row);
+    });
+  })();
   document.getElementById('goOnlineBtn').addEventListener('click', ()=>{
     if(window.FFOnline && typeof window.FFOnline.enterOnline === 'function'){
       window.FFOnline.enterOnline();

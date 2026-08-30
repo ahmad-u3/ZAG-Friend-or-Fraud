@@ -586,3 +586,131 @@
     color:var(--navy-2);
     opacity:.8;
   }
+
+  /* ---------- credits / attribution ---------- */
+  .credit{
+    margin-top:20px;
+    padding-top:16px;
+    border-top:2.5px dashed rgba(16,24,43,.25);
+    text-align:center;
+  }
+  .credit-line{
+    margin:0 0 10px;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--navy-2);
+  }
+  .credit-line b{ color:var(--navy); }
+  .credit-line a, .credit-fine a{
+    color:var(--navy);
+    text-decoration:underline;
+    text-underline-offset:2px;
+  }
+  .credit-cta{
+    display:inline-block;
+    font-family:'Archivo Black',sans-serif;
+    text-transform:uppercase;
+    font-size:12.5px;
+    letter-spacing:.03em;
+    color:var(--navy);
+    background:var(--lime);
+    border:2.5px solid var(--line);
+    border-radius:999px;
+    box-shadow:var(--shadow-off-sm);
+    padding:10px 18px;
+    text-decoration:none;
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .credit-cta:hover{ transform:translate(-2px,-2px); box-shadow:5px 5px 0 var(--ink); }
+  .credit-cta:active{ transform:translate(1px,1px); box-shadow:1px 1px 0 var(--ink); }
+  .credit-fine{
+    margin:12px 0 0;
+    font-size:10.5px;
+    font-weight:600;
+    line-height:1.5;
+    color:var(--navy-2);
+    opacity:.75;
+  }
+
+  /* ---------- how to play ---------- */
+  .howto-intro{
+    font-size:13px;
+    font-weight:500;
+    color:var(--navy-2);
+    line-height:1.55;
+    margin:0 0 18px;
+  }
+  .howto-intro b{ color:var(--navy); }
+
+  .howto-steps{
+    margin:0 0 22px;
+    padding-left:0;
+    list-style:none;
+    counter-reset:howto;
+  }
+  .howto-steps li{
+    counter-increment:howto;
+    position:relative;
+    padding:12px 14px 12px 46px;
+    margin-bottom:10px;
+    border:2.5px solid var(--line);
+    border-radius:14px;
+    background:var(--paper);
+    font-size:12.5px;
+    font-weight:500;
+    line-height:1.5;
+    color:var(--navy-2);
+  }
+  .howto-steps li b{ color:var(--navy); }
+  .howto-steps li::before{
+    content:counter(howto);
+    position:absolute;
+    left:11px; top:11px;
+    width:24px; height:24px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Archivo Black',sans-serif;
+    font-size:12px;
+    color:var(--lime);
+    background:var(--navy);
+    border:2px solid var(--line);
+    border-radius:50%;
+  }
+
+  .howto-h2{
+    font-family:'Archivo Black',sans-serif;
+    text-transform:uppercase;
+    font-size:15px;
+    color:var(--navy);
+    margin:0 0 10px;
+  }
+  .howto-p{
+    font-size:12.5px;
+    font-weight:500;
+    line-height:1.55;
+    color:var(--navy-2);
+    margin:0 0 22px;
+  }
+  .howto-p b{ color:var(--navy); }
+
+  .howto-cats{ display:flex; flex-direction:column; gap:8px; margin-bottom:22px; }
+  .howto-cat{
+    display:flex; align-items:flex-start; gap:11px;
+    border:2px solid var(--line);
+    border-radius:12px;
+    padding:10px 12px;
+    background:repeating-linear-gradient(135deg, var(--lime-pale), var(--lime-pale) 10px, var(--paper) 10px, var(--paper) 20px);
+  }
+  .howto-cat-icon{ font-size:19px; line-height:1.2; }
+  .howto-cat b{
+    font-family:'Archivo Black',sans-serif;
+    font-size:12.5px;
+    color:var(--navy);
+    display:block;
+  }
+  .howto-cat p{
+    margin:3px 0 0;
+    font-size:11.5px;
+    font-weight:500;
+    line-height:1.45;
+    color:var(--navy-2);
+  }
