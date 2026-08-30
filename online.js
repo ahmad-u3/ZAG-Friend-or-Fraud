@@ -164,6 +164,10 @@
     recapWrap: document.getElementById('recapWrap'),
     recapList: document.getElementById('recapList'),
     rematchBtn: document.getElementById('rematchBtn'),
+    statsWrap: document.getElementById('statsWrap'),
+    awardList: document.getElementById('awardList'),
+    statTable: document.getElementById('statTable'),
+    statNote: document.getElementById('statNote'),
     acceptAnswerBtn: document.getElementById('acceptAnswerBtn'),
     rejectAnswerBtn: document.getElementById('rejectAnswerBtn'),
     resultsSubOnline: document.getElementById('resultsSubOnline'),
@@ -575,9 +579,12 @@
 
     if(phase === 'spinning' && !maySpin){
       const askerId = upcomingAskerId(room, game);
-      el.spectatorNote.textContent = isOnline(room, askerId)
-        ? '⏳ ' + playerName(room, askerId) + ' spins this round…'
-        : '⚠️ ' + playerName(room, askerId) + ' looks disconnected — the host can spin.';
+      const spinning = game.spinAt && serverNow() < game.spinAt + SPIN_MS;
+      el.spectatorNote.textContent = spinning
+        ? '🎡 Spinning…'
+        : (isOnline(room, askerId)
+            ? '⏳ ' + playerName(room, askerId) + ' spins this round…'
+            : '⚠️ ' + playerName(room, askerId) + ' looks disconnected — the host can step in.');
       el.spectatorNote.classList.remove('hidden');
     } else {
       el.spectatorNote.classList.add('hidden');
@@ -680,9 +687,20 @@
 
   function canSpin(room, game){
     if((game.phase || 'spinning') !== 'spinning') return false;
+    // a spin is already animating — nobody may start another
+    if(game.spinAt && serverNow() < game.spinAt + SPIN_MS) return false;
     const me = myPlayerId();
     if(!me) return false;
-    return online.isHost || me === upcomingAskerId(room, game);
+
+    const askerId = upcomingAskerId(room, game);
+    if(me === askerId) return true;
+    if(!online.isHost) return false;
+
+    // the host is a fallback, not a second spinner: only step in when the
+    // asker has dropped or has sat on it long enough to look stuck
+    const askerGone = !isOnline(room, askerId);
+    const stalled = game.phaseAt && (serverNow() - game.phaseAt > STALL_MS);
+    return askerGone || !!stalled;
   }
 
   // ---------- host-side round driver ----------
@@ -708,6 +726,14 @@
       const stalled = !isOnline(room, ar.answererId) ||
                       (game.phaseAt && serverNow() - game.phaseAt > STALL_MS);
       el.skipRoundBtn.classList.toggle('hidden', !stalled);
+    }
+
+    // the host's fallback spin unlocks on a timer, and a stalled room
+    // pushes no snapshots, so re-evaluate the button here
+    if(game.phase === 'spinning'){
+      const maySpinNow = canSpin(room, game);
+      el.spinBtnOnline.classList.toggle('hidden', !maySpinNow);
+      el.spinBtnOnline.disabled = !maySpinNow || online.hostSpinInProgress;
     }
 
     // a spin finished animating -> open the answering phase
@@ -757,11 +783,15 @@
     } else {
       res = { verdict:'no', score:0, reason:'checker unavailable' };
     }
+    const cur = (online.lastRoomSnapshot && online.lastRoomSnapshot.game &&
+                 online.lastRoomSnapshot.game.round) || {};
+    const left = Math.max(0, (cur.deadline || 0) - serverNow());
     const updates = {
       phase:'judging',
       'round/verdict': res.verdict,
       'round/reason': res.reason,
-      'round/timedOut': !!timedOut
+      'round/timedOut': !!timedOut,
+      'round/ms': timedOut ? 0 : Math.max(0, GUESS_SECONDS*1000 - left)
     };
     // a clean match needs no ruling; anything else is on the clock
     if(res.verdict !== 'match'){
@@ -804,6 +834,7 @@
         answer: r.answer || '',
         guess: r.timedOut ? '' : (r.guess || ''),
         timedOut: !!r.timedOut,
+        ms: r.ms || 0,
         awarded: !!award
       });
       while(history.length > HISTORY_MAX) history.shift();
@@ -814,6 +845,7 @@
       history,
       phase:'spinning',
       phaseAt: serverNow(),
+      spinAt: 0,
       revealVisible:false,
       round:null,
       turnCount:(game.turnCount || 1) + 1
@@ -995,7 +1027,124 @@
       ? (winners.length>1 ? `It's a tie between ${winners.join(' and ')}!` : `${winners[0]} knows their people best!`)
       : 'No points scored this round — rematch?';
     if(winners.length && FF.launchConfetti) FF.launchConfetti();
+    renderStats(room);
     renderRecap(room);
+  }
+
+  // ---------- end-of-game statistics ----------
+  function renderStats(room){
+    const history = (room.game && Array.isArray(room.game.history)) ? room.game.history : [];
+    el.awardList.innerHTML = '';
+    el.statTable.innerHTML = '';
+    el.statNote.textContent = '';
+    if(history.length < 2){ el.statsWrap.classList.add('hidden'); return; }
+    el.statsWrap.classList.remove('hidden');
+
+    // tally per player, in both roles
+    const P = {};
+    const slot = name => (P[name] = P[name] || {
+      name, guesses:0, correct:0, timeouts:0, msTotal:0, msCount:0,
+      asked:0, read:0,           // times they answered / times someone read them right
+      run:0, bestRun:0           // consecutive correct guesses by this player
+    });
+
+    const catStats = {};
+
+    history.forEach(h=>{
+      const g = slot(h.guesser), a = slot(h.answerer);
+      g.guesses++; a.asked++;
+      if(h.awarded){
+        g.correct++; a.read++;
+        g.run++;
+        if(g.run > g.bestRun) g.bestRun = g.run;
+      } else {
+        g.run = 0;
+      }
+      if(h.timedOut) g.timeouts++;
+      else if(h.ms > 0){ g.msTotal += h.ms; g.msCount++; }
+
+      const c = catStats[h.cat] = catStats[h.cat] || { hits:0, total:0 };
+      c.total++; if(h.awarded) c.hits++;
+    });
+
+    const players = Object.values(P);
+    const rate = p => p.guesses ? p.correct / p.guesses : 0;
+    const avgMs = p => p.msCount ? p.msTotal / p.msCount : Infinity;
+
+    const awards = [];
+
+    // sharpest guesser — most correct, accuracy breaks the tie
+    const guessers = players.filter(p=>p.guesses >= 2);
+    if(guessers.length){
+      const best = guessers.slice().sort((x,y)=> y.correct - x.correct || rate(y) - rate(x))[0];
+      if(best.correct > 0){
+        awards.push(['🎯','Sharpest guesser', `${best.name} — ${best.correct} of ${best.guesses} right`]);
+      }
+    }
+
+    // quickest — lowest average time to a correct guess
+    const quick = players.filter(p=>p.msCount >= 2 && p.correct > 0);
+    if(quick.length){
+      const q = quick.slice().sort((x,y)=> avgMs(x) - avgMs(y))[0];
+      awards.push(['⚡','Quickest draw', `${q.name} — ${(avgMs(q)/1000).toFixed(1)}s on average`]);
+    }
+
+    // open book — the person others read most easily
+    const answerers = players.filter(p=>p.asked >= 2);
+    if(answerers.length){
+      const readRate = p => p.asked ? p.read / p.asked : 0;
+      const open = answerers.slice().sort((x,y)=> readRate(y) - readRate(x))[0];
+      const hard = answerers.slice().sort((x,y)=> readRate(x) - readRate(y))[0];
+      if(readRate(open) > 0){
+        awards.push(['📖','Open book', `${open.name} — read right ${open.read}/${open.asked} times`]);
+      }
+      if(hard.name !== open.name && readRate(hard) < 0.5){
+        awards.push(['🕵️','Hardest to read', `${hard.name} — only ${hard.read}/${hard.asked} guessed`]);
+      }
+    }
+
+    const streaker = players.slice().sort((x,y)=> y.bestRun - x.bestRun)[0];
+    if(streaker && streaker.bestRun >= 2){
+      awards.push(['🔥','Hot streak', `${streaker.name} — ${streaker.bestRun} correct in a row`]);
+    }
+
+    const clocked = players.filter(p=>p.timeouts > 0)
+                           .sort((x,y)=> y.timeouts - x.timeouts)[0];
+    if(clocked && clocked.timeouts >= 2){
+      awards.push(['⏱️','Beaten by the clock', `${clocked.name} — ran out ${clocked.timeouts} times`]);
+    }
+
+    awards.forEach(([icon, title, line])=>{
+      const card = document.createElement('div');
+      card.className = 'award';
+      card.innerHTML = `<span class="award-icon">${icon}</span>` +
+                       `<div><b>${esc(title)}</b><p>${esc(line)}</p></div>`;
+      el.awardList.appendChild(card);
+    });
+
+    // accuracy table
+    players.slice().sort((x,y)=> rate(y) - rate(x) || y.correct - x.correct).forEach(p=>{
+      if(!p.guesses) return;
+      const pct = Math.round(rate(p) * 100);
+      const row = document.createElement('div');
+      row.className = 'stat-row';
+      row.innerHTML =
+        `<span class="stat-name">${esc(p.name)}</span>
+         <span class="stat-bar"><i style="width:${pct}%"></i></span>
+         <span class="stat-val">${p.correct}/${p.guesses}</span>`;
+      el.statTable.appendChild(row);
+    });
+
+    // toughest category
+    const cats = Object.keys(catStats).filter(k=>catStats[k].total >= 2);
+    if(cats.length){
+      const tough = cats.sort((a,b)=> (catStats[a].hits/catStats[a].total) - (catStats[b].hits/catStats[b].total))[0];
+      const cat = CATEGORIES[tough];
+      if(cat){
+        el.statNote.textContent =
+          `Toughest category: ${cat.icon} ${cat.name} — ${catStats[tough].hits} of ${catStats[tough].total} matched`;
+      }
+    }
   }
 
   // Escape anything a player typed — it goes into innerHTML below.
