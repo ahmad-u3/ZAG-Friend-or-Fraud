@@ -40,7 +40,8 @@
     hostTickTimer: null,
     timerLoop: null,
     judgingSeed: -1,
-    lastRoundSeed: -1
+    lastRoundSeed: -1,
+    spinResolvedSeed: -1
   };
 
   function randomId(){
@@ -85,6 +86,7 @@
     stopTimerLoop();
     online.judgingSeed = -1;
     online.lastRoundSeed = -1;
+    online.spinResolvedSeed = -1;
     online.role = null; online.roomCode = null; online.hostId = null; online.hostPlayerId = null;
     online.playerId = null; online.playerName = null; online.isHost = false;
     online.lastSpinSeed = -1; online.wheelInitialized = false;
@@ -140,6 +142,10 @@
     verdictBadge: document.getElementById('verdictBadge'),
     verdictReason: document.getElementById('verdictReason'),
     hostJudgeRow: document.getElementById('hostJudgeRow'),
+    judgeTimerWrap: document.getElementById('judgeTimerWrap'),
+    judgeTimerBar: document.getElementById('judgeTimerBar'),
+    judgeTimerNum: document.getElementById('judgeTimerNum'),
+    spectatorNote: document.getElementById('spectatorNote'),
     acceptAnswerBtn: document.getElementById('acceptAnswerBtn'),
     rejectAnswerBtn: document.getElementById('rejectAnswerBtn'),
     resultsSubOnline: document.getElementById('resultsSubOnline'),
@@ -307,7 +313,7 @@
     const game = {
       units, currentIndex:0, askerIndex:0, turnCount:1,
       lastCategoryIndex:null, revealVisible:false, wheelRotation:0, spinSeed:0,
-      phase:'spinning'
+      phase:'spinning', spinAt:0
     };
     db.ref('rooms/' + online.roomCode).update({ status:'playing', game });
   });
@@ -481,10 +487,20 @@
       online.lastSpinSeed = game.spinSeed || 0;
     }
 
-    // spin button — only live while the round is idle
+    // spin button — the asker for this round spins it (host may also step in)
     const phase = game.phase || 'spinning';
-    el.spinBtnOnline.disabled = !online.isHost || online.hostSpinInProgress || phase !== 'spinning';
+    const maySpin = canSpin(room, game);
+    el.spinBtnOnline.classList.toggle('hidden', !maySpin);
+    el.spinBtnOnline.disabled = !maySpin || online.hostSpinInProgress;
     el.spinBtnOnline.textContent = online.hostSpinInProgress ? 'Spinning…' : '🎡 Spin for a category';
+
+    if(phase === 'spinning' && !maySpin){
+      const askerId = upcomingAskerId(room, game);
+      el.spectatorNote.textContent = '⏳ ' + playerName(room, askerId) + ' spins this round…';
+      el.spectatorNote.classList.remove('hidden');
+    } else {
+      el.spectatorNote.classList.add('hidden');
+    }
 
     // category reveal
     if(game.revealVisible && game.lastCategoryIndex !== null && game.lastCategoryIndex !== undefined){
@@ -502,9 +518,9 @@
   }
 
   el.spinBtnOnline.addEventListener('click', ()=>{
-    if(!online.isHost || online.hostSpinInProgress) return;
     const room = online.lastRoomSnapshot;
     if(!room || !room.game) return;
+    if(!canSpin(room, room.game) || online.hostSpinInProgress) return;
     const game = room.game;
 
     online.hostSpinInProgress = true;
@@ -526,20 +542,14 @@
       wheelRotation: finalRotation,
       spinSeed: (game.spinSeed || 0) + 1,
       revealVisible: false,
-      lastCategoryIndex: i
+      lastCategoryIndex: i,
+      phase: 'spinning',
+      spinAt: serverNow()
     });
 
-    setTimeout(()=>{
-      const snap = online.lastRoomSnapshot;
-      const g = snap && snap.game;
-      if(!g){ online.hostSpinInProgress = false; return; }
-      db.ref('rooms/' + online.roomCode + '/game').update({
-        revealVisible: true,
-        phase: 'answering',
-        round: buildRound(snap, g)
-      });
-      online.hostSpinInProgress = false;
-    }, 4300);
+    // The host's tick loop opens the answering phase once the wheel settles,
+    // so a spin works the same whether the host or the asker pressed it.
+    setTimeout(()=>{ online.hostSpinInProgress = false; }, SPIN_MS);
   });
 
   // ============================================================
@@ -547,6 +557,8 @@
   // ============================================================
 
   const GUESS_SECONDS = 15;
+  const JUDGE_SECONDS = 15;   // how long the host has to accept or reject
+  const SPIN_MS = 4300;       // wheel animation length
 
   function serverNow(){ return Date.now() + (online.serverOffset || 0); }
 
@@ -577,6 +589,19 @@
     return { answererId, guesserId, answer:'', guess:'', deadline:0, verdict:'', reason:'', timedOut:false };
   }
 
+  // The asker for the coming round is whoever buildRound would pick as answerer,
+  // and that only depends on game state, so it can be known before the spin.
+  function upcomingAskerId(room, game){
+    try { return buildRound(room, game).answererId; } catch(e){ return null; }
+  }
+
+  function canSpin(room, game){
+    if((game.phase || 'spinning') !== 'spinning') return false;
+    const me = myPlayerId();
+    if(!me) return false;
+    return online.isHost || me === upcomingAskerId(room, game);
+  }
+
   // ---------- host-side round driver ----------
   function startHostTick(){
     stopHostTick();
@@ -591,10 +616,29 @@
     const room = online.lastRoomSnapshot;
     if(!room || room.status !== 'playing' || !room.game) return;
     const game = room.game;
-    const r = game.round;
-    if(!r) return;
     const seed = game.spinSeed || 0;
     const base = 'rooms/' + online.roomCode + '/game';
+
+    // a spin finished animating -> open the answering phase
+    if(game.phase === 'spinning'){
+      if(game.spinAt && serverNow() > game.spinAt + SPIN_MS && online.spinResolvedSeed !== seed){
+        online.spinResolvedSeed = seed;
+        db.ref(base).update({
+          revealVisible: true,
+          phase: 'answering',
+          round: buildRound(room, game)
+        });
+      }
+      return;
+    }
+
+    const r = game.round;
+    if(!r) return;
+
+    if(game.phase === 'judging'){
+      if(r.judgeDeadline && serverNow() > r.judgeDeadline + 400) resolveRound(false);
+      return;
+    }
 
     if(game.phase === 'answering'){
       if(r.answer){
@@ -621,14 +665,19 @@
     } else {
       res = { verdict:'no', score:0, reason:'checker unavailable' };
     }
-    db.ref('rooms/' + online.roomCode + '/game').update({
+    const updates = {
       phase:'judging',
       'round/verdict': res.verdict,
       'round/reason': res.reason,
       'round/timedOut': !!timedOut
-    });
+    };
+    // a clean match needs no ruling; anything else is on the clock
+    if(res.verdict !== 'match'){
+      updates['round/judgeDeadline'] = serverNow() + JUDGE_SECONDS*1000;
+    }
+    db.ref('rooms/' + online.roomCode + '/game').update(updates);
     if(res.verdict === 'match'){
-      setTimeout(()=> resolveRound(true), 1800);   // auto-award a clean match
+      setTimeout(()=> resolveRound(true), 1800);
     }
   }
 
@@ -707,8 +756,8 @@
         el.guessingStatus.innerHTML = `\u23f3 <b>${who}</b> is guessing\u2026`;
         el.guessInputWrap.classList.add('hidden');
       }
-      startTimerLoop(r.deadline || 0);
-    } else {
+      startTimerLoop(r.deadline || 0, GUESS_SECONDS, el.timerBar, el.timerNum);
+    } else if(phase !== 'judging'){
       stopTimerLoop();
     }
 
@@ -725,20 +774,31 @@
       el.verdictReason.textContent = r.reason ? r.reason : '';
       // host rules on anything that is not a clean match
       el.hostJudgeRow.classList.toggle('hidden', v === 'match');
+
+      if(v !== 'match' && r.judgeDeadline){
+        el.judgeTimerWrap.classList.remove('hidden');
+        startTimerLoop(r.judgeDeadline, JUDGE_SECONDS, el.judgeTimerBar, el.judgeTimerNum);
+        if(!online.isHost){
+          el.verdictReason.textContent =
+            (r.reason ? r.reason + ' — ' : '') + 'waiting on the host…';
+        }
+      } else {
+        el.judgeTimerWrap.classList.add('hidden');
+        stopTimerLoop();
+      }
     }
   }
 
   // ---------- countdown ----------
-  function startTimerLoop(deadline){
+  function startTimerLoop(deadline, totalSeconds, barEl, numEl){
     stopTimerLoop();
     if(!deadline) return;
     const tick = ()=>{
       const left = Math.max(0, deadline - serverNow());
-      const secs = Math.ceil(left / 1000);
-      el.timerNum.textContent = secs;
-      const pct = Math.max(0, Math.min(100, (left / (GUESS_SECONDS*1000)) * 100));
-      el.timerBar.style.width = pct + '%';
-      el.timerBar.classList.toggle('warn', left <= 5000);
+      numEl.textContent = Math.ceil(left / 1000);
+      const pct = Math.max(0, Math.min(100, (left / (totalSeconds*1000)) * 100));
+      barEl.style.width = pct + '%';
+      barEl.classList.toggle('warn', left <= 5000);
       if(left <= 0) stopTimerLoop();
     };
     tick();
