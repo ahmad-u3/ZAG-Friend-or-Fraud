@@ -18,10 +18,91 @@
     revealVisible: false,
     wheelRotation: 0,
     spinning: false,
-    screen: 'count'
+    screen: 'count',
+    settings: { guessSecs: 0, targetScore: 0 },   // 0 = off / no limit
+    history: []                                   // { cat, unit, matched }
   };
 
   const STORAGE_KEY = 'friendOrFraud_save_v1';
+  const SETTINGS_KEY = 'friendOrFraud_settings_v1';
+
+  // Settings persist between games so you don't re-pick them every time.
+  function loadSettings(){
+    try{
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if(raw){
+        const s = JSON.parse(raw);
+        state.settings.guessSecs  = Number(s.guessSecs)  || 0;
+        state.settings.targetScore = Number(s.targetScore) || 0;
+      }
+    }catch(e){}
+  }
+  function persistSettings(){
+    try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings)); }catch(e){}
+  }
+
+  const OFF_SEGS = [
+    ['segGuessOff',  'guessSecs',   [[0,'Off'],[10,'10s'],[15,'15s'],[30,'30s']]],
+    ['segTargetOff', 'targetScore', [[0,'∞'],[5,'5'],[10,'10'],[15,'15']]]
+  ];
+
+  function buildOfflineSettings(){
+    OFF_SEGS.forEach(([id, field, opts])=>{
+      const wrap = document.getElementById(id);
+      if(!wrap) return;
+      wrap.innerHTML = '';
+      opts.forEach(([val, label])=>{
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'seg-btn';
+        b.dataset.val = String(val);
+        b.textContent = label;
+        b.addEventListener('click', ()=>{
+          state.settings[field] = val;
+          persistSettings();
+          renderOfflineSettings();
+        });
+        wrap.appendChild(b);
+      });
+    });
+  }
+
+  function renderOfflineSettings(){
+    OFF_SEGS.forEach(([id, field])=>{
+      const wrap = document.getElementById(id);
+      if(!wrap) return;
+      wrap.querySelectorAll('.seg-btn').forEach(b=>{
+        b.classList.toggle('on', Number(b.dataset.val) === state.settings[field]);
+      });
+    });
+  }
+
+  // ---------- answer countdown ----------
+  let offTimer = null;
+  function stopOffTimer(){
+    if(offTimer){ clearInterval(offTimer); offTimer = null; }
+  }
+  function startOffTimer(){
+    stopOffTimer();
+    const wrap = document.getElementById('offTimerWrap');
+    const bar  = document.getElementById('offTimerBar');
+    const num  = document.getElementById('offTimerNum');
+    const secs = state.settings.guessSecs;
+    if(!wrap) return;
+    if(!secs){ wrap.classList.add('hidden'); return; }
+    wrap.classList.remove('hidden');
+    const deadline = Date.now() + secs*1000;
+    const tick = ()=>{
+      const left = Math.max(0, deadline - Date.now());
+      num.textContent = left > 0 ? Math.ceil(left/1000) : "Time's up!";
+      bar.style.width = Math.max(0, Math.min(100, (left/(secs*1000))*100)) + '%';
+      bar.classList.toggle('warn', left <= 5000);
+      // the timer only nudges — the players still decide if it matched
+      if(left <= 0) stopOffTimer();
+    };
+    tick();
+    offTimer = setInterval(tick, 200);
+  }
 
   function saveGame(){
     try{
@@ -140,6 +221,7 @@
       b.classList.add('selected');
       state.numPlayers = n;
       state.mode = (n === 2) ? 'solo' : 'team';
+      state.history = [];
       toNamesBtn.disabled = false;
     });
     countGrid.appendChild(b);
@@ -296,6 +378,9 @@
       turnSub.classList.add('hidden');
     }
     document.getElementById('categoryReveal').classList.add('hidden');
+    stopOffTimer();
+    const tw = document.getElementById('offTimerWrap');
+    if(tw) tw.classList.add('hidden');
     document.getElementById('spinBtn').disabled = false;
     document.getElementById('spinBtn').textContent = '🎡 Spin for a category';
     state.revealVisible = false;
@@ -333,12 +418,19 @@
     }, 4300);
   }
 
-  function revealCategory(i){
+  function revealCategory(i, noTimer){
     const cat = CATEGORIES[i];
     document.getElementById('revealIcon').textContent = cat.icon;
     document.getElementById('revealName').textContent = cat.name;
     document.getElementById('revealDesc').textContent = cat.desc;
     state.revealVisible = true;
+    if(noTimer){
+      stopOffTimer();
+      const w = document.getElementById('offTimerWrap');
+      if(w) w.classList.add('hidden');
+    } else {
+      startOffTimer();
+    }
 
     const hintEl = document.getElementById('revealHint');
     const matchBtn = document.getElementById('matchBtn');
@@ -360,6 +452,17 @@
   document.getElementById('noMatchBtn').addEventListener('click', ()=> resolveTurn(false));
 
   function resolveTurn(isMatch){
+    stopOffTimer();
+    const scoring = state.mode === 'solo'
+      ? state.units[1 - state.askerIndex]
+      : state.units[state.currentIndex];
+    if(!Array.isArray(state.history)) state.history = [];
+    state.history.push({
+      cat: state.lastCategoryIndex == null ? -1 : state.lastCategoryIndex,
+      unit: scoring ? scoring.label : '',
+      matched: !!isMatch
+    });
+
     if(state.mode === 'solo'){
       const guesserIndex = 1 - state.askerIndex;
       const guesser = state.units[guesserIndex];
@@ -381,6 +484,13 @@
     renderScoreboard();
     document.getElementById('spinBtn').disabled = true;
     saveGame();
+
+    // first to the target score ends it
+    const target = state.settings.targetScore;
+    if(target && state.units.some(u => (u.score || 0) >= target)){
+      setTimeout(endGame, 900);
+      return;
+    }
 
     setTimeout(()=>{
       if(state.mode === 'solo'){
@@ -427,9 +537,104 @@
     document.getElementById('resultsSub').textContent = winners.length
       ? (winners.length>1 ? `It's a tie between ${winners.join(' and ')}!` : `${winners[0]} knows their people best!`)
       : 'No points scored this round — rematch?';
+    renderOfflineStats();
     showScreen('results');
     clearSavedGame();
     if(winners.length) launchConfetti();
+  }
+
+  function escHtml(v){
+    return (v == null ? '' : String(v))
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // ---------- offline end-game stats ----------
+  function renderOfflineStats(){
+    const wrap  = document.getElementById('statsWrapOff');
+    const list  = document.getElementById('awardListOff');
+    const table = document.getElementById('statTableOff');
+    const note  = document.getElementById('statNoteOff');
+    if(!wrap) return;
+    const history = Array.isArray(state.history) ? state.history : [];
+    list.innerHTML = ''; table.innerHTML = ''; note.textContent = '';
+    if(history.length < 2){ wrap.classList.add('hidden'); return; }
+    wrap.classList.remove('hidden');
+
+    const U = {};
+    const slot = name => (U[name] = U[name] || { name, turns:0, hits:0, run:0, bestRun:0 });
+    const catStats = {};
+
+    history.forEach(h=>{
+      const u = slot(h.unit || '—');
+      u.turns++;
+      if(h.matched){
+        u.hits++; u.run++;
+        if(u.run > u.bestRun) u.bestRun = u.run;
+      } else {
+        u.run = 0;
+      }
+      const c = catStats[h.cat] = catStats[h.cat] || { hits:0, total:0 };
+      c.total++; if(h.matched) c.hits++;
+    });
+
+    const units = Object.values(U);
+    const rate = u => u.turns ? u.hits / u.turns : 0;
+    const awards = [];
+
+    const eligible = units.filter(u=>u.turns >= 2);
+    if(eligible.length){
+      const best = eligible.slice().sort((a,b)=> b.hits - a.hits || rate(b) - rate(a))[0];
+      if(best.hits > 0){
+        awards.push(['🎯','Sharpest read', `${best.name} — ${best.hits} of ${best.turns} matched`]);
+      }
+      if(eligible.length > 1){
+        const worst = eligible.slice().sort((a,b)=> rate(a) - rate(b))[0];
+        if(worst.name !== best.name && rate(worst) < 0.5){
+          awards.push(['🕵️','Total frauds', `${worst.name} — only ${worst.hits}/${worst.turns}`]);
+        }
+      }
+    }
+
+    const streaker = units.slice().sort((a,b)=> b.bestRun - a.bestRun)[0];
+    if(streaker && streaker.bestRun >= 2){
+      awards.push(['🔥','Hot streak', `${streaker.name} — ${streaker.bestRun} in a row`]);
+    }
+
+    const perfect = units.filter(u=>u.turns >= 3 && u.hits === u.turns);
+    perfect.forEach(u=>{
+      awards.push(['💯','Flawless', `${u.name} — matched every single time`]);
+    });
+
+    awards.forEach(([icon, title, line])=>{
+      const card = document.createElement('div');
+      card.className = 'award';
+      card.innerHTML = `<span class="award-icon">${icon}</span>` +
+                       `<div><b>${escHtml(title)}</b><p>${escHtml(line)}</p></div>`;
+      list.appendChild(card);
+    });
+
+    units.slice().sort((a,b)=> rate(b) - rate(a) || b.hits - a.hits).forEach(u=>{
+      const pct = Math.round(rate(u) * 100);
+      const row = document.createElement('div');
+      row.className = 'stat-row';
+      row.innerHTML =
+        `<span class="stat-name">${escHtml(u.name)}</span>
+         <span class="stat-bar"><i style="width:${pct}%"></i></span>
+         <span class="stat-val">${u.hits}/${u.turns}</span>`;
+      table.appendChild(row);
+    });
+
+    const cats = Object.keys(catStats).filter(k=>catStats[k].total >= 2);
+    if(cats.length){
+      const tough = cats.sort((a,b)=>
+        (catStats[a].hits/catStats[a].total) - (catStats[b].hits/catStats[b].total))[0];
+      const cat = CATEGORIES[tough];
+      if(cat){
+        note.textContent = `Toughest category: ${cat.icon} ${cat.name} — ` +
+                           `${catStats[tough].hits} of ${catStats[tough].total} matched`;
+      }
+    }
   }
 
   function launchConfetti(){
@@ -454,6 +659,9 @@
     state.askerIndex = 0;
     state.turnCount = 1;
     state.wheelRotation = 0;
+    state.history = [];
+    stopOffTimer();
+    renderOfflineSettings();
     document.querySelectorAll('.count-btn').forEach(x=>x.classList.remove('selected'));
     toNamesBtn.disabled = true;
     showScreen('count');
@@ -473,7 +681,7 @@
       renderScoreboard();
       renderTurnBanner();
       if(wasRevealVisible && savedCategoryIndex !== null && savedCategoryIndex !== undefined){
-        revealCategory(savedCategoryIndex);
+        revealCategory(savedCategoryIndex, true);
         spinBtn.disabled = true;
       }
       showScreen('game');
@@ -486,5 +694,9 @@
   restoreOrInit();
 
   // Shared interface for online.js
+  loadSettings();
+  buildOfflineSettings();
+  renderOfflineSettings();
+
   window.FF = { CATEGORIES, showToast, showScreen, screens, endGameTopBtn, launchConfetti, requestWakeLock, releaseWakeLock };
 })();

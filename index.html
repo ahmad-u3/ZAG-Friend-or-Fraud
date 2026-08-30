@@ -32,7 +32,7 @@
 <link rel="icon" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=9">
+<link rel="stylesheet" href="styles.css?v=10">
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 </head>
@@ -297,7 +297,14 @@
     <h1 class="display" style="font-size:28px;margin:6px 0 4px;" id="namesTitle">Name your pairs</h1>
     <p class="sub" style="margin-bottom:16px;" id="namesSub">Each pair shares one dry-erase card and tries to match answers.</p>
     <div id="pairInputs"></div>
-    <button class="btn full" id="startGameBtn">Start Game →</button>
+
+    <div class="settings-box">
+      <span class="pair-label">Game settings</span>
+      <div class="set-row"><span class="set-label">Answer timer</span><div class="seg" id="segGuessOff"></div></div>
+      <div class="set-row"><span class="set-label">Play to</span><div class="seg" id="segTargetOff"></div></div>
+    </div>
+
+    <button class="btn full" id="startGameBtn" style="margin-top:14px;">Start Game →</button>
   </section>
 
   <!-- SCREEN 3: game -->
@@ -325,6 +332,10 @@
         <h3 id="revealName">Category</h3>
         <p id="revealDesc">Description</p>
         <div class="hint" id="revealHint">📇 Draw a card from this category & ask away</div>
+        <div class="timer-wrap hidden" id="offTimerWrap" style="margin-bottom:14px;">
+          <div class="timer-bar" id="offTimerBar"></div>
+          <span class="timer-num" id="offTimerNum">15</span>
+        </div>
         <div class="verdict-row">
           <button class="btn full" id="matchBtn">✅ It's a Match (+1)</button>
           <button class="btn ghost full" id="noMatchBtn">❌ No Match</button>
@@ -341,6 +352,15 @@
     <h1 class="display">Results are in!</h1>
     <p class="sub" id="resultsSub">Here's who really knows who.</p>
     <div class="leaderboard" id="leaderboard"></div>
+
+    <div class="stats hidden" id="statsWrapOff">
+      <h2 class="recap-h2">Standouts</h2>
+      <div class="award-list" id="awardListOff"></div>
+      <h2 class="recap-h2" style="margin-top:16px;">Match rate</h2>
+      <div class="stat-table" id="statTableOff"></div>
+      <p class="stat-note" id="statNoteOff"></p>
+    </div>
+
     <button class="btn full" id="playAgainBtn">↺ Play Again</button>
   </section>
 
@@ -348,10 +368,10 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="firebase-config.js?v=9" defer></script>
-<script src="answer-check.js?v=9" defer></script>
-<script src="script.js?v=9" defer></script>
-<script src="online.js?v=9" defer></script>
-<script src="music.js?v=9" defer></script>
+<script src="firebase-config.js?v=10" defer></script>
+<script src="answer-check.js?v=10" defer></script>
+<script src="script.js?v=10" defer></script>
+<script src="online.js?v=10" defer></script>
+<script src="music.js?v=10" defer></script>
 </body>
 </html>
