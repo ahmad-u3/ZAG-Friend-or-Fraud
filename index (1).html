@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Friend or Fraud — Game Companion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="phone">
+
+  <div class="brandbar">
+    <div class="logo">ZAG</div>
+    <button class="end-btn hidden" id="endGameTopBtn">End Game</button>
+  </div>
+
+  <!-- SCREEN 1: how many players -->
+  <section id="screen-count" class="card">
+    <span class="eyebrow">Friend or Fraud</span>
+    <h1 class="display">How many<br>are playing?</h1>
+    <p class="sub">Pick a headcount — you'll be split into pairs.</p>
+    <div class="count-grid" id="countGrid"></div>
+    <button class="btn full" id="toNamesBtn" disabled>Next: Name your pairs →</button>
+  </section>
+
+  <!-- SCREEN 2: names -->
+  <section id="screen-names" class="card hidden">
+    <span class="eyebrow">Friend or Fraud</span>
+    <h1 class="display" style="font-size:28px;margin:6px 0 4px;" id="namesTitle">Name your pairs</h1>
+    <p class="sub" style="margin-bottom:16px;" id="namesSub">Each pair shares one dry-erase card and tries to match answers.</p>
+    <div id="pairInputs"></div>
+    <button class="btn full" id="startGameBtn">Start Game →</button>
+  </section>
+
+  <!-- SCREEN 3: game -->
+  <section id="screen-game" class="hidden">
+    <div class="scoreboard" id="scoreboard"></div>
+
+    <div class="card" style="margin-top:14px;">
+      <div class="turn-banner">
+        <span class="eyebrow" id="turnCountLabel">Turn 1</span>
+        <h2 id="turnPairName">— & —</h2>
+        <p class="turn-sub hidden" id="turnSub"></p>
+      </div>
+
+      <div class="wheel-zone">
+        <div class="pointer"></div>
+        <div class="wheel-outer">
+          <div class="wheel-inner" id="wheelInner"></div>
+          <div class="hub"></div>
+        </div>
+        <button class="btn spin-btn" id="spinBtn">🎡 Spin for a category</button>
+      </div>
+
+      <div class="category-reveal hidden" id="categoryReveal">
+        <div class="icon" id="revealIcon">🔍</div>
+        <h3 id="revealName">Category</h3>
+        <p id="revealDesc">Description</p>
+        <div class="hint" id="revealHint">📇 Draw a card from this category & ask away</div>
+        <div class="verdict-row">
+          <button class="btn full" id="matchBtn">✅ It's a Match (+1)</button>
+          <button class="btn ghost full" id="noMatchBtn">❌ No Match</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="note">Answers don't match? The card goes back to the bottom of the deck.</footer>
+  </section>
+
+  <!-- SCREEN 4: results -->
+  <section id="screen-results" class="card hidden">
+    <span class="eyebrow">Game Over</span>
+    <h1 class="display">Results are in!</h1>
+    <p class="sub" id="resultsSub">Here's who really knows who.</p>
+    <div class="leaderboard" id="leaderboard"></div>
+    <button class="btn full" id="playAgainBtn">↺ Play Again</button>
+  </section>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="script.js" defer></script>
+</body>
+</html>
