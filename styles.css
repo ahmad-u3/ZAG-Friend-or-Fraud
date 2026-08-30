@@ -886,3 +886,64 @@
     .stat-name{ flex-basis:62px; font-size:11.5px; }
     .award p{ font-size:11.5px; }
   }
+
+  /* ---------- host game settings ---------- */
+  .settings-box{
+    border:2.5px solid var(--line);
+    border-radius:16px;
+    padding:13px;
+    margin-top:14px;
+    background:var(--paper);
+  }
+  .set-row{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    margin-bottom:9px;
+  }
+  .set-row:last-of-type{ margin-bottom:4px; }
+  .set-label{
+    flex:0 0 82px;
+    font-size:11.5px;
+    font-weight:700;
+    color:var(--navy-2);
+  }
+  .seg{
+    flex:1;
+    display:flex;
+    gap:5px;
+  }
+  .seg-btn{
+    flex:1;
+    font-family:'Poppins',sans-serif;
+    font-weight:700;
+    font-size:12px;
+    padding:7px 4px;
+    border:2px solid var(--line);
+    border-radius:9px;
+    background:var(--paper);
+    color:var(--navy);
+    transition:background .12s ease, color .12s ease;
+  }
+  .seg-btn.on{ background:var(--navy); color:var(--lime); }
+  .set-hint{
+    margin:8px 0 0;
+    font-size:10.5px;
+    font-weight:600;
+    color:var(--navy-2);
+    opacity:.7;
+    text-align:center;
+  }
+  .lobby-rules{
+    margin:12px 0 0;
+    text-align:center;
+    font-size:11.5px;
+    font-weight:600;
+    color:var(--navy-2);
+    opacity:.85;
+  }
+
+  @media (max-width:430px){
+    .set-label{ flex-basis:70px; font-size:11px; }
+    .seg-btn{ font-size:11px; padding:7px 2px; }
+  }

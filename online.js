@@ -164,6 +164,10 @@
     recapWrap: document.getElementById('recapWrap'),
     recapList: document.getElementById('recapList'),
     rematchBtn: document.getElementById('rematchBtn'),
+    segGuess: document.getElementById('segGuess'),
+    segJudge: document.getElementById('segJudge'),
+    segTarget: document.getElementById('segTarget'),
+    joinRules: document.getElementById('joinRules'),
     statsWrap: document.getElementById('statsWrap'),
     awardList: document.getElementById('awardList'),
     statTable: document.getElementById('statTable'),
@@ -271,6 +275,7 @@
       const hostPlayerId = db.ref('rooms/' + code + '/players').push().key;
       db.ref('rooms/' + code).set({
         numPlayers, mode, status:'lobby', hostId, hostPlayerId,
+        settings: { guessSecs: GUESS_SECONDS, judgeSecs: JUDGE_SECONDS, targetScore: 0 },
         createdAt: firebase.database.ServerValue.TIMESTAMP,
         players: {
           [hostPlayerId]: { name: hostName, joinedAt: firebase.database.ServerValue.TIMESTAMP }
@@ -333,10 +338,16 @@
         });
       }
     }
+    const s = room.settings || {};
     const game = {
       units, currentIndex:0, askerIndex:0, turnCount:1,
       lastCategoryIndex:null, revealVisible:false, wheelRotation:0, spinSeed:0,
-      phase:'spinning', spinAt:0, phaseAt:0
+      phase:'spinning', spinAt:0, phaseAt:0,
+      settings: {
+        guessSecs: s.guessSecs || GUESS_SECONDS,
+        judgeSecs: (s.judgeSecs === 0 ? 0 : (s.judgeSecs || JUDGE_SECONDS)),
+        targetScore: s.targetScore || 0
+      }
     };
     db.ref('rooms/' + online.roomCode).update({ status:'playing', game });
   });
@@ -501,6 +512,8 @@
   function renderLobby(room){
     const entries = room.players ? Object.keys(room.players).sort().map(k=>({ key:k, name:room.players[k].name })) : [];
     const statusEl = online.isHost ? el.hostLobbyStatus : el.joinLobbyStatus;
+    if(online.isHost) renderSettings(room);
+    else if(el.joinRules) el.joinRules.textContent = describeRules(room);
     const listEl = online.isHost ? el.hostLobbyList : el.joinLobbyList;
     statusEl.textContent = `${entries.length} of ${room.numPlayers} joined`;
     listEl.innerHTML = '';
@@ -602,6 +615,12 @@
       el.categoryRevealOnline.classList.add('hidden');
     }
 
+    const tgt = rules(game).targetScore;
+    if(tgt){
+      el.turnCountLabelOnline.textContent =
+        `Turn ${game.turnCount || 1} · First to ${tgt}`;
+    }
+
     renderRound(room);
   }
 
@@ -677,6 +696,63 @@
       guesserId  = ids[1 - slot] || null;
     }
     return { answererId, guesserId, answer:'', guess:'', deadline:0, verdict:'', reason:'', timedOut:false };
+  }
+
+  // ---------- settings ----------
+  // Reads the game's locked copy, falling back to the room's (lobby) copy.
+  function rules(source){
+    const s = (source && source.settings) || {};
+    return {
+      guessSecs: s.guessSecs || GUESS_SECONDS,
+      judgeSecs: (s.judgeSecs === 0 ? 0 : (s.judgeSecs || JUDGE_SECONDS)),
+      targetScore: s.targetScore || 0
+    };
+  }
+
+  function describeRules(source){
+    const r = rules(source);
+    const bits = [`${r.guessSecs}s to guess`];
+    bits.push(r.judgeSecs ? `${r.judgeSecs}s for the host to rule` : 'no ruling timer');
+    bits.push(r.targetScore ? `first to ${r.targetScore}` : 'no score limit');
+    return bits.join(' · ');
+  }
+
+  const SEG_DEFS = [
+    ['segGuess',  'guessSecs',   [[10,'10s'],[15,'15s'],[30,'30s']]],
+    ['segJudge',  'judgeSecs',   [[10,'10s'],[15,'15s'],[30,'30s'],[0,'Off']]],
+    ['segTarget', 'targetScore', [[0,'∞'],[5,'5'],[10,'10'],[15,'15']]]
+  ];
+
+  function buildSettingsUI(){
+    SEG_DEFS.forEach(([elKey, field, opts])=>{
+      const wrap = el[elKey];
+      if(!wrap) return;
+      wrap.innerHTML = '';
+      opts.forEach(([val, label])=>{
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'seg-btn';
+        b.dataset.val = String(val);
+        b.textContent = label;
+        b.addEventListener('click', ()=>{
+          if(!online.isHost || !online.roomCode) return;
+          db.ref('rooms/' + online.roomCode + '/settings/' + field).set(val).catch(()=>{});
+        });
+        wrap.appendChild(b);
+      });
+    });
+  }
+  buildSettingsUI();
+
+  function renderSettings(room){
+    const r = rules(room);
+    SEG_DEFS.forEach(([elKey, field])=>{
+      const wrap = el[elKey];
+      if(!wrap) return;
+      wrap.querySelectorAll('.seg-btn').forEach(b=>{
+        b.classList.toggle('on', Number(b.dataset.val) === r[field]);
+      });
+    });
   }
 
   // The asker for the coming round is whoever buildRound would pick as answerer,
@@ -760,7 +836,10 @@
 
     if(game.phase === 'answering'){
       if(r.answer){
-        db.ref(base).update({ phase:'guessing', 'round/deadline': serverNow() + GUESS_SECONDS*1000 });
+        db.ref(base).update({
+          phase:'guessing',
+          'round/deadline': serverNow() + rules(game).guessSecs*1000
+        });
       }
     } else if(game.phase === 'guessing'){
       if(online.judgingSeed === seed) return;      // already judged this round
@@ -783,19 +862,20 @@
     } else {
       res = { verdict:'no', score:0, reason:'checker unavailable' };
     }
-    const cur = (online.lastRoomSnapshot && online.lastRoomSnapshot.game &&
-                 online.lastRoomSnapshot.game.round) || {};
+    const g0 = (online.lastRoomSnapshot && online.lastRoomSnapshot.game) || {};
+    const cfg = rules(g0);
+    const cur = g0.round || {};
     const left = Math.max(0, (cur.deadline || 0) - serverNow());
     const updates = {
       phase:'judging',
       'round/verdict': res.verdict,
       'round/reason': res.reason,
       'round/timedOut': !!timedOut,
-      'round/ms': timedOut ? 0 : Math.max(0, GUESS_SECONDS*1000 - left)
+      'round/ms': timedOut ? 0 : Math.max(0, cfg.guessSecs*1000 - left)
     };
-    // a clean match needs no ruling; anything else is on the clock
-    if(res.verdict !== 'match'){
-      updates['round/judgeDeadline'] = serverNow() + JUDGE_SECONDS*1000;
+    // a clean match needs no ruling; anything else is on the clock (unless off)
+    if(res.verdict !== 'match' && cfg.judgeSecs > 0){
+      updates['round/judgeDeadline'] = serverNow() + cfg.judgeSecs*1000;
     }
     db.ref('rooms/' + online.roomCode + '/game').update(updates);
     if(res.verdict === 'match'){
@@ -853,7 +933,12 @@
     if(room.mode === 'solo') updates.askerIndex = 1 - game.askerIndex;
     else updates.currentIndex = (game.currentIndex + 1) % units.length;
 
-    db.ref('rooms/' + online.roomCode + '/game').update(updates);
+    const target = rules(game).targetScore;
+    db.ref('rooms/' + online.roomCode + '/game').update(updates).then(()=>{
+      if(target && units.some(u => (u.score || 0) >= target)){
+        db.ref('rooms/' + online.roomCode).update({ status:'finished' });
+      }
+    }).catch(()=>{});
   }
 
   // ---------- rendering ----------
@@ -912,7 +997,7 @@
         el.guessingStatus.innerHTML = `⏳ <b>${who}</b> is guessing…`;
         el.guessInputWrap.classList.add('hidden');
       }
-      startTimerLoop(r.deadline || 0, GUESS_SECONDS, el.timerBar, el.timerNum);
+      startTimerLoop(r.deadline || 0, rules(game).guessSecs, el.timerBar, el.timerNum);
     } else if(phase !== 'judging'){
       stopTimerLoop();
     }
@@ -931,9 +1016,9 @@
       // host rules on anything that is not a clean match
       el.hostJudgeRow.classList.toggle('hidden', v === 'match');
 
-      if(v !== 'match' && r.judgeDeadline){
+      if(v !== 'match' && r.judgeDeadline && rules(game).judgeSecs > 0){
         el.judgeTimerWrap.classList.remove('hidden');
-        startTimerLoop(r.judgeDeadline, JUDGE_SECONDS, el.judgeTimerBar, el.judgeTimerNum);
+        startTimerLoop(r.judgeDeadline, rules(game).judgeSecs, el.judgeTimerBar, el.judgeTimerNum);
         if(!online.isHost){
           el.verdictReason.textContent =
             (r.reason ? r.reason + ' — ' : '') + 'waiting on the host…';

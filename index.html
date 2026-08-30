@@ -32,7 +32,7 @@
 <link rel="icon" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="styles.css?v=9">
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 </head>
@@ -134,6 +134,15 @@
       <button class="btn ghost full" id="copyLinkBtn" style="margin-bottom:16px;">📤 Share Join Link</button>
       <p class="lobby-status" id="hostLobbyStatus">Waiting for players…</p>
       <div class="lobby-list" id="hostLobbyList"></div>
+
+      <div class="settings-box">
+        <span class="pair-label">Game settings</span>
+        <div class="set-row"><span class="set-label">Guess timer</span><div class="seg" id="segGuess"></div></div>
+        <div class="set-row"><span class="set-label">Host ruling</span><div class="seg" id="segJudge"></div></div>
+        <div class="set-row"><span class="set-label">Play to</span><div class="seg" id="segTarget"></div></div>
+        <p class="set-hint">Locked once the game starts.</p>
+      </div>
+
       <button class="btn full" id="startOnlineGameBtn" disabled style="margin-top:14px;">Start Game →</button>
     </div>
   </section>
@@ -167,6 +176,7 @@
     <h1 class="display" style="font-size:28px;">Waiting on host…</h1>
     <p class="lobby-status" id="joinLobbyStatus">Waiting for players…</p>
     <div class="lobby-list" id="joinLobbyList"></div>
+    <p class="lobby-rules" id="joinRules"></p>
   </section>
 
   <!-- ONLINE: game (shared view, host gets extra controls) -->
@@ -338,10 +348,10 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="firebase-config.js?v=8" defer></script>
-<script src="answer-check.js?v=8" defer></script>
-<script src="script.js?v=8" defer></script>
-<script src="online.js?v=8" defer></script>
-<script src="music.js?v=8" defer></script>
+<script src="firebase-config.js?v=9" defer></script>
+<script src="answer-check.js?v=9" defer></script>
+<script src="script.js?v=9" defer></script>
+<script src="online.js?v=9" defer></script>
+<script src="music.js?v=9" defer></script>
 </body>
 </html>
