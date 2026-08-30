@@ -190,6 +190,13 @@
     tryCreateRoom(hostNumPlayers, hostName, 0);
   });
 
+  function sweepOldRooms(){
+    const cutoff = Date.now() - 6*60*60*1000; // 6 hours
+    db.ref('rooms').orderByChild('createdAt').endAt(cutoff).once('value').then(snap=>{
+      snap.forEach(child => child.ref.remove().catch(()=>{}));
+    }).catch(()=>{});
+  }
+
   function tryCreateRoom(numPlayers, hostName, attempt){
     const code = generateRoomCode();
     db.ref('rooms/' + code).once('value').then(snap=>{
@@ -215,6 +222,7 @@
         el.createRoomBtn.disabled = false;
         el.createRoomBtn.textContent = 'Create Room →';
         subscribeRoom(code);
+        sweepOldRooms();
       }).catch(()=>{
         FF.showToast('Could not create room — check your Firebase setup');
         el.createRoomBtn.disabled = false;
@@ -545,7 +553,13 @@
       : 'No points scored this round — rematch?';
     if(winners.length && FF.launchConfetti) FF.launchConfetti();
   }
-
+  window.addEventListener('pagehide', ()=>{
+    if(online.isHost && online.roomCode && online.lastRoomSnapshot
+       && online.lastRoomSnapshot.status === 'finished'){
+      const url = firebaseConfig.databaseURL + '/rooms/' + online.roomCode + '.json';
+      navigator.sendBeacon(url, JSON.stringify(null));
+    }
+  });
   el.backToMenuBtn.addEventListener('click', ()=>{
     if(online.isHost && online.roomCode){
       db.ref('rooms/' + online.roomCode).remove().catch(()=>{});
