@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -17,8 +19,135 @@
     <button class="end-btn hidden" id="endGameTopBtn">End Game</button>
   </div>
 
-  <!-- SCREEN 1: how many players -->
-  <section id="screen-count" class="card">
+  <!-- SCREEN 0: main menu -->
+  <section id="screen-menu" class="card">
+    <span class="eyebrow">Friend or Fraud</span>
+    <h1 class="display">Let's play</h1>
+    <p class="sub">Playing in one room, or across everyone's own phones?</p>
+    <div class="menu-stack">
+      <button class="btn full" id="goOfflineBtn">📴 Play Offline<span class="btn-sub">One phone, passed around</span></button>
+      <button class="btn coral full" id="goOnlineBtn">🌐 Play Online<span class="btn-sub">Host a room, friends join in</span></button>
+    </div>
+  </section>
+
+  <!-- ONLINE: choose host or join -->
+  <section id="screen-online-choice" class="card hidden">
+    <button class="back-btn" data-back="menu">← Back</button>
+    <span class="eyebrow">Play Online</span>
+    <h1 class="display">Host or join?</h1>
+    <p class="sub">The host runs the game — everyone else joins with a code.</p>
+    <div class="menu-stack">
+      <button class="btn full" id="goHostBtn">🎛️ Host a Game</button>
+      <button class="btn ghost full" id="goJoinBtn">🔗 Join a Game</button>
+    </div>
+  </section>
+
+  <!-- ONLINE: host setup -->
+  <section id="screen-host-setup" class="card hidden">
+    <button class="back-btn" data-back="onlineChoice">← Back</button>
+    <span class="eyebrow">Host a Game</span>
+    <div id="hostStep1">
+      <h1 class="display" style="font-size:28px;">You're playing too!</h1>
+      <p class="sub">Enter your name, then pick the total headcount (you included).</p>
+      <div class="pair-card">
+        <span class="pair-label">Your Name</span>
+        <div class="name-inputs">
+          <input type="text" maxlength="18" placeholder="Your name" id="hostNameInput">
+        </div>
+      </div>
+      <div class="count-grid" id="countGridOnline"></div>
+      <button class="btn full" id="createRoomBtn" disabled>Create Room →</button>
+    </div>
+    <div id="hostStep2" class="hidden">
+      <p class="sub" style="margin-bottom:6px;">Share this code or link:</p>
+      <div class="room-code" id="roomCodeDisplay">— — — —</div>
+      <button class="btn ghost full" id="copyLinkBtn" style="margin-bottom:16px;">📋 Copy Join Link</button>
+      <p class="lobby-status" id="hostLobbyStatus">Waiting for players…</p>
+      <div class="lobby-list" id="hostLobbyList"></div>
+      <button class="btn full" id="startOnlineGameBtn" disabled style="margin-top:14px;">Start Game →</button>
+    </div>
+  </section>
+
+  <!-- ONLINE: join -->
+  <section id="screen-join" class="card hidden">
+    <button class="back-btn" data-back="onlineChoice">← Back</button>
+    <span class="eyebrow">Join a Game</span>
+    <h1 class="display" style="font-size:28px;">Join the room</h1>
+    <p class="sub">Ask the host for their code.</p>
+    <div class="pair-card">
+      <span class="pair-label">Room Code</span>
+      <div class="name-inputs">
+        <input type="text" maxlength="6" placeholder="e.g. FX7Q" id="joinCodeInput" style="text-transform:uppercase;letter-spacing:.08em;">
+      </div>
+    </div>
+    <div class="pair-card">
+      <span class="pair-label">Your Name</span>
+      <div class="name-inputs">
+        <input type="text" maxlength="18" placeholder="Your name" id="joinNameInput">
+      </div>
+    </div>
+    <p class="join-error" id="joinErrorMsg"></p>
+    <button class="btn full" id="submitJoinBtn">Join →</button>
+  </section>
+
+  <!-- ONLINE: waiting lobby (joiner) -->
+  <section id="screen-join-waiting" class="card hidden">
+    <button class="back-btn" data-back="menu">← Leave</button>
+    <span class="eyebrow">You're in!</span>
+    <h1 class="display" style="font-size:28px;">Waiting on host…</h1>
+    <p class="lobby-status" id="joinLobbyStatus">Waiting for players…</p>
+    <div class="lobby-list" id="joinLobbyList"></div>
+  </section>
+
+  <!-- ONLINE: game (shared view, host gets extra controls) -->
+  <section id="screen-online-game" class="hidden">
+    <div class="scoreboard" id="scoreboardOnline"></div>
+
+    <div class="card" style="margin-top:14px;">
+      <div class="turn-banner">
+        <span class="eyebrow" id="turnCountLabelOnline">Turn 1</span>
+        <h2 id="turnPairNameOnline">— & —</h2>
+        <p class="turn-sub hidden" id="turnSubOnline"></p>
+      </div>
+
+      <div class="wheel-zone">
+        <div class="pointer"></div>
+        <div class="wheel-outer">
+          <div class="wheel-inner" id="wheelInnerOnline"></div>
+          <div class="hub"></div>
+        </div>
+        <button class="btn spin-btn host-only" id="spinBtnOnline">🎡 Spin for a category</button>
+        <p class="sub host-hide" id="spectatorNote" style="margin-top:14px;">👀 Watching — the host runs the wheel</p>
+      </div>
+
+      <div class="category-reveal hidden" id="categoryRevealOnline">
+        <div class="icon" id="revealIconOnline">🔍</div>
+        <h3 id="revealNameOnline">Category</h3>
+        <p id="revealDescOnline">Description</p>
+        <div class="hint" id="revealHintOnline">📇 Draw a card from this category & ask away</div>
+        <div class="verdict-row host-only">
+          <button class="btn full" id="matchBtnOnline">✅ It's a Match (+1)</button>
+          <button class="btn ghost full" id="noMatchBtnOnline">❌ No Match</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn coral full host-only" id="endGameOnlineBtn" style="margin-top:14px;">🏁 End Game</button>
+    <footer class="note">Answers don't match? The card goes back to the bottom of the deck.</footer>
+  </section>
+
+  <!-- ONLINE: results -->
+  <section id="screen-online-results" class="card hidden">
+    <span class="eyebrow">Game Over</span>
+    <h1 class="display">Results are in!</h1>
+    <p class="sub" id="resultsSubOnline">Here's who really knows who.</p>
+    <div class="leaderboard" id="leaderboardOnline"></div>
+    <button class="btn full" id="backToMenuBtn">↺ Back to Menu</button>
+  </section>
+
+  <!-- SCREEN 1 (offline): how many players -->
+  <section id="screen-count" class="card hidden">
+    <button class="back-btn" data-back="menu">← Back</button>
     <span class="eyebrow">Friend or Fraud</span>
     <h1 class="display">How many<br>are playing?</h1>
     <p class="sub">Pick a headcount — you'll be split into pairs.</p>
@@ -83,6 +212,8 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="firebase-config.js" defer></script>
 <script src="script.js" defer></script>
+<script src="online.js" defer></script>
 </body>
 </html>

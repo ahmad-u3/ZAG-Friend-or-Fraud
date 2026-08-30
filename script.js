@@ -49,6 +49,13 @@
 
   // ---------- element refs ----------
   const screens = {
+    menu: document.getElementById('screen-menu'),
+    onlineChoice: document.getElementById('screen-online-choice'),
+    hostSetup: document.getElementById('screen-host-setup'),
+    join: document.getElementById('screen-join'),
+    joinWaiting: document.getElementById('screen-join-waiting'),
+    onlineGame: document.getElementById('screen-online-game'),
+    onlineResults: document.getElementById('screen-online-results'),
     count: document.getElementById('screen-count'),
     names: document.getElementById('screen-names'),
     game: document.getElementById('screen-game'),
@@ -58,6 +65,10 @@
   const toast = document.getElementById('toast');
 
   function showScreen(name){
+    if(!screens[name]){
+      console.error('showScreen: unknown screen name "' + name + '"');
+      return;
+    }
     Object.values(screens).forEach(s=>s.classList.add('hidden'));
     screens[name].classList.remove('hidden');
     endGameTopBtn.classList.toggle('hidden', name !== 'game');
@@ -70,6 +81,19 @@
     toast.classList.add('show');
     setTimeout(()=> toast.classList.remove('show'), 1400);
   }
+
+  // ---------- SCREEN 0: menu + generic back buttons ----------
+  document.getElementById('goOfflineBtn').addEventListener('click', ()=> showScreen('count'));
+  document.getElementById('goOnlineBtn').addEventListener('click', ()=>{
+    if(window.FFOnline && typeof window.FFOnline.enterOnline === 'function'){
+      window.FFOnline.enterOnline();
+    } else {
+      showToast('Online mode is still loading — try again in a second');
+    }
+  });
+  document.querySelectorAll('.back-btn[data-back]').forEach(btn=>{
+    btn.addEventListener('click', ()=> showScreen(btn.dataset.back));
+  });
 
   // ---------- SCREEN 1 ----------
   const countGrid = document.getElementById('countGrid');
@@ -422,9 +446,12 @@
       showScreen('game');
       showToast('Welcome back — picked up right where you left off');
     } else {
-      showScreen('count');
+      showScreen('menu');
     }
   }
 
   restoreOrInit();
+
+  // Shared interface for online.js
+  window.FF = { CATEGORIES, showToast, showScreen, screens, endGameTopBtn, launchConfetti };
 })();
