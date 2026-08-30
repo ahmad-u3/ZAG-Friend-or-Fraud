@@ -195,7 +195,7 @@
     min-width:0;
     font-family:'Poppins',sans-serif;
     font-weight:600;
-    font-size:14px;
+    font-size:16px;   /* keep >=16px: iOS zooms the page on smaller inputs */
     padding:10px 12px;
     border:2px solid var(--line);
     border-radius:10px;
@@ -497,7 +497,7 @@
   .answer-input input{
     font-family:'Poppins',sans-serif;
     font-weight:600;
-    font-size:15px;
+    font-size:16px;   /* keep >=16px: iOS zooms the page on smaller inputs */
     padding:13px 14px;
     border:2.5px solid var(--line);
     border-radius:12px;
@@ -607,7 +607,10 @@
     text-underline-offset:2px;
   }
   .credit-cta{
-    display:inline-block;
+    display:block;
+    width:100%;
+    box-sizing:border-box;
+    text-align:center;
     font-family:'Archivo Black',sans-serif;
     text-transform:uppercase;
     font-size:12.5px;
@@ -713,4 +716,34 @@
     font-weight:500;
     line-height:1.45;
     color:var(--navy-2);
+  }
+
+  /* ---------- phone tightening ---------- */
+  @media (max-width:430px){
+    body{ padding:14px 10px 40px; }
+    .phone{ gap:12px; }
+    .card{ padding:17px; border-radius:22px; }
+
+    #screen-menu .display{ font-size:30px; margin:6px 0 4px; }
+    #screen-menu .sub{ font-size:12.5px; margin:0 0 12px; }
+    .menu-stack{ gap:9px; }
+
+    .btn{ font-size:14.5px; padding:13px 15px; }
+    .btn .btn-sub{ font-size:10.5px; margin-top:3px; }
+
+    .credit{ margin-top:15px; padding-top:12px; }
+    .credit-line{ font-size:11.5px; margin-bottom:9px; }
+    .credit-cta{ font-size:11.5px; padding:11px 14px; }
+    .credit-fine{ font-size:9.5px; margin-top:9px; }
+
+    #screen-howto .display{ font-size:26px; }
+    .howto-steps li{ font-size:12px; padding:11px 12px 11px 42px; }
+    .howto-cat p{ font-size:11px; }
+  }
+
+  /* very small phones (SE, older Androids) */
+  @media (max-width:360px){
+    #screen-menu .display{ font-size:26px; }
+    .btn{ font-size:13.5px; padding:12px 13px; }
+    .wheel-outer{ width:210px; height:210px; }
   }
