@@ -63,6 +63,23 @@
   };
   const endGameTopBtn = document.getElementById('endGameTopBtn');
   const toast = document.getElementById('toast');
+    // ---------- keep screen awake during play ----------
+  let wakeLock = null;
+  async function requestWakeLock(){
+    if(!('wakeLock' in navigator)) return;
+    try{
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', ()=>{ wakeLock = null; });
+    }catch(e){}
+  }
+  function releaseWakeLock(){
+    if(wakeLock){ wakeLock.release().catch(()=>{}); wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'visible' && isPlayScreen(state.screen)) requestWakeLock();
+  });
+
+  function isPlayScreen(name){ return name === 'game' || name === 'onlineGame'; }
 
   function showScreen(name){
     if(!screens[name]){
@@ -73,6 +90,7 @@
     screens[name].classList.remove('hidden');
     endGameTopBtn.classList.toggle('hidden', name !== 'game');
     state.screen = name;
+    if(isPlayScreen(name)) requestWakeLock(); else releaseWakeLock();
     saveGame();
   }
 

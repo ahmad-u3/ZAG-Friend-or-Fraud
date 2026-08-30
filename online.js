@@ -231,10 +231,21 @@
     });
   }
 
-  el.copyLinkBtn.addEventListener('click', ()=>{
+  el.copyLinkBtn.addEventListener('click', async ()=>{
     const link = location.origin + location.pathname + '?join=' + online.roomCode;
+    const shareData = {
+      title: 'Friend or Fraud',
+      text: `Join my game! Code: ${online.roomCode}`,
+      url: link
+    };
+    if(navigator.share){
+      try{ await navigator.share(shareData); return; }
+      catch(e){ if(e.name === 'AbortError') return; }
+    }
     if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(link).then(()=> FF.showToast('Link copied!')).catch(()=> FF.showToast(link));
+      navigator.clipboard.writeText(link)
+        .then(()=> FF.showToast('Link copied!'))
+        .catch(()=> FF.showToast(link));
     } else {
       FF.showToast(link);
     }
@@ -454,6 +465,7 @@
   el.spinBtnOnline.addEventListener('click', ()=>{
     if(!online.isHost || online.hostSpinInProgress) return;
     const room = online.lastRoomSnapshot;
+    window.FF = { CATEGORIES, showToast, showScreen, screens, endGameTopBtn, launchConfetti, requestWakeLock, releaseWakeLock };
     if(!room || !room.game) return;
     const game = room.game;
 
