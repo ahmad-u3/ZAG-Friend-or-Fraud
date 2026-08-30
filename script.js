@@ -471,5 +471,5 @@
   restoreOrInit();
 
   // Shared interface for online.js
-  window.FF = { CATEGORIES, showToast, showScreen, screens, endGameTopBtn, launchConfetti };
+  window.FF = { CATEGORIES, showToast, showScreen, screens, endGameTopBtn, launchConfetti, requestWakeLock, releaseWakeLock };
 })();

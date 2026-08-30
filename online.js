@@ -465,7 +465,6 @@
   el.spinBtnOnline.addEventListener('click', ()=>{
     if(!online.isHost || online.hostSpinInProgress) return;
     const room = online.lastRoomSnapshot;
-    window.FF = { CATEGORIES, showToast, showScreen, screens, endGameTopBtn, launchConfetti, requestWakeLock, releaseWakeLock };
     if(!room || !room.game) return;
     const game = room.game;
 
