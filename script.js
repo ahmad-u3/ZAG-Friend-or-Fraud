@@ -101,7 +101,7 @@
   }
 
   // ---------- SCREEN 0: menu + generic back buttons ----------
-  document.getElementById('goOfflineBtn').addEventListener('click', ()=> showScreen('count'));
+  document.getElementById('goSoloBtn').addEventListener('click', ()=> showScreen('count'));
   document.getElementById('goOnlineBtn').addEventListener('click', ()=>{
     if(window.FFOnline && typeof window.FFOnline.enterOnline === 'function'){
       window.FFOnline.enterOnline();
