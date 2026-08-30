@@ -1,0 +1,32 @@
+{
+  "name": "Friend or Fraud",
+  "short_name": "Friend or Fraud",
+  "description": "The party game that finds out who really knows who. Spin the wheel, match your answers, expose the frauds.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#CBDB2A",
+  "theme_color": "#CBDB2A",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
