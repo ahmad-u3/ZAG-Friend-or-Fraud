@@ -319,6 +319,13 @@
   });
 
   // ---------- join flow ----------
+  // Two players sharing a name makes the lobby, scoreboard and "X is guessing…"
+  // prompts ambiguous, so names must be distinct within a room.
+  function sameName(a, b){
+    const clean = v => (v == null ? '' : String(v)).trim().toLowerCase().replace(/\s+/g, ' ');
+    return clean(a) === clean(b) && clean(a) !== '';
+  }
+
   function showJoinError(msg){
     el.joinErrorMsg.textContent = msg;
     el.joinErrorMsg.classList.add('show');
@@ -347,14 +354,24 @@
       if(room.status !== 'lobby') throw new Error('started');
       const currentCount = room.players ? Object.keys(room.players).length : 0;
       if(currentCount >= room.numPlayers) throw new Error('full');
+      const taken = room.players
+        ? Object.keys(room.players).some(k => sameName(room.players[k].name, name))
+        : false;
+      if(taken) throw new Error('nametaken');
       return db.ref('rooms/' + code + '/players').push({ name, joinedAt: firebase.database.ServerValue.TIMESTAMP });
     }).then(ref=>{
       online.role = 'player'; online.roomCode = code; online.playerId = ref.key; online.playerName = name; online.isHost = false;
       saveOnlineSession();
       subscribeRoom(code);
     }).catch(err=>{
-      const messages = { notfound:'Room not found — check the code', started:'That game already started', full:'That room is full' };
+      const messages = {
+        notfound:'Room not found — check the code',
+        started:'That game already started',
+        full:'That room is full',
+        nametaken:'Someone in the room already has that name — add a letter or a nickname'
+      };
       showJoinError(messages[err.message] || 'Something went wrong — try again');
+      if(err.message === 'nametaken') el.joinNameInput.classList.add('invalid');
     }).finally(()=>{
       el.submitJoinBtn.disabled = false;
       el.submitJoinBtn.textContent = 'Join →';
@@ -691,9 +708,9 @@
     const scoringIndex = room.mode === 'solo' ? (1 - game.askerIndex) : game.currentIndex;
     if(award && units[scoringIndex]){
       units[scoringIndex].score = (units[scoringIndex].score || 0) + 1;
-      FF.showToast(`\u2705 Point for ${units[scoringIndex].label}!`);
+      FF.showToast(`✅ Point for ${units[scoringIndex].label}!`);
     } else {
-      FF.showToast('\u274c No point this round');
+      FF.showToast('❌ No point this round');
     }
 
     const activeIndex = room.mode === 'solo' ? game.askerIndex : game.currentIndex;
@@ -738,10 +755,10 @@
     if(phase === 'answering'){
       const who = playerName(room, r.answererId);
       if(isAnswerer){
-        el.answeringStatus.innerHTML = '\u270d\ufe0f Your turn \u2014 type the <b>real answer</b>. Keep it secret.';
+        el.answeringStatus.innerHTML = '✍️ Your turn — type the <b>real answer</b>. Keep it secret.';
         el.answerInputWrap.classList.remove('hidden');
       } else {
-        el.answeringStatus.innerHTML = `\u23f3 Waiting for <b>${who}</b> to write the real answer\u2026`;
+        el.answeringStatus.innerHTML = `⏳ Waiting for <b>${who}</b> to write the real answer…`;
         el.answerInputWrap.classList.add('hidden');
       }
     }
@@ -749,11 +766,11 @@
     if(phase === 'guessing'){
       const who = playerName(room, r.guesserId);
       if(isGuesser){
-        el.guessingStatus.innerHTML = '\U0001f914 Your turn \u2014 what did they say?';
+        el.guessingStatus.innerHTML = '🤔 Your turn — what did they say?';
         el.guessInputWrap.classList.remove('hidden');
         if(document.activeElement !== el.guessInput) el.guessInput.focus();
       } else {
-        el.guessingStatus.innerHTML = `\u23f3 <b>${who}</b> is guessing\u2026`;
+        el.guessingStatus.innerHTML = `⏳ <b>${who}</b> is guessing…`;
         el.guessInputWrap.classList.add('hidden');
       }
       startTimerLoop(r.deadline || 0, GUESS_SECONDS, el.timerBar, el.timerNum);
@@ -762,15 +779,15 @@
     }
 
     if(phase === 'judging'){
-      el.judgeReal.textContent  = r.answer || '\u2014';
-      el.judgeGuess.textContent = r.timedOut ? '(no answer in time)' : (r.guess || '\u2014');
+      el.judgeReal.textContent  = r.answer || '—';
+      el.judgeGuess.textContent = r.timedOut ? '(no answer in time)' : (r.guess || '—');
 
       const v = r.verdict || 'no';
       el.verdictBadge.className = 'verdict-badge is-' + v;
       el.verdictBadge.textContent =
-        v === 'match' ? '\u2705 Match \u2014 point awarded' :
-        v === 'close' ? '\U0001f914 Close \u2014 host decides' :
-                        '\u274c Not a match';
+        v === 'match' ? '✅ Match — point awarded' :
+        v === 'close' ? '🤔 Close — host decides' :
+                        '❌ Not a match';
       el.verdictReason.textContent = r.reason ? r.reason : '';
       // host rules on anything that is not a clean match
       el.hostJudgeRow.classList.toggle('hidden', v === 'match');
