@@ -12,6 +12,13 @@
     }
   }catch(e){ console.error('Firebase init failed:', e); }
 
+  // Keep local time aligned with Firebase so every phone counts the same 15s.
+  if(db){
+    db.ref('.info/serverTimeOffset').on('value', snap=>{
+      online.serverOffset = snap.val() || 0;
+    });
+  }
+
   const SESSION_KEY = 'ffOnlineSession';
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no O/0, I/1 — avoids confusion
 
@@ -28,7 +35,12 @@
     wheelInitialized: false,
     hostSpinInProgress: false,
     pendingEndOnline: false,
-    lastRoomSnapshot: null
+    lastRoomSnapshot: null,
+    serverOffset: 0,
+    hostTickTimer: null,
+    timerLoop: null,
+    judgingSeed: -1,
+    lastRoundSeed: -1
   };
 
   function randomId(){
@@ -69,6 +81,10 @@
 
   function resetOnlineLocalState(){
     detachRoomListener();
+    stopHostTick();
+    stopTimerLoop();
+    online.judgingSeed = -1;
+    online.lastRoundSeed = -1;
     online.role = null; online.roomCode = null; online.hostId = null; online.hostPlayerId = null;
     online.playerId = null; online.playerName = null; online.isHost = false;
     online.lastSpinSeed = -1; online.wheelInitialized = false;
@@ -105,9 +121,27 @@
     revealNameOnline: document.getElementById('revealNameOnline'),
     revealDescOnline: document.getElementById('revealDescOnline'),
     revealHintOnline: document.getElementById('revealHintOnline'),
-    matchBtnOnline: document.getElementById('matchBtnOnline'),
-    noMatchBtnOnline: document.getElementById('noMatchBtnOnline'),
     endGameOnlineBtn: document.getElementById('endGameOnlineBtn'),
+    roundAnswering: document.getElementById('roundAnswering'),
+    answeringStatus: document.getElementById('answeringStatus'),
+    answerInputWrap: document.getElementById('answerInputWrap'),
+    answerInput: document.getElementById('answerInput'),
+    submitAnswerBtn: document.getElementById('submitAnswerBtn'),
+    roundGuessing: document.getElementById('roundGuessing'),
+    timerBar: document.getElementById('timerBar'),
+    timerNum: document.getElementById('timerNum'),
+    guessingStatus: document.getElementById('guessingStatus'),
+    guessInputWrap: document.getElementById('guessInputWrap'),
+    guessInput: document.getElementById('guessInput'),
+    submitGuessBtn: document.getElementById('submitGuessBtn'),
+    roundJudging: document.getElementById('roundJudging'),
+    judgeReal: document.getElementById('judgeReal'),
+    judgeGuess: document.getElementById('judgeGuess'),
+    verdictBadge: document.getElementById('verdictBadge'),
+    verdictReason: document.getElementById('verdictReason'),
+    hostJudgeRow: document.getElementById('hostJudgeRow'),
+    acceptAnswerBtn: document.getElementById('acceptAnswerBtn'),
+    rejectAnswerBtn: document.getElementById('rejectAnswerBtn'),
     resultsSubOnline: document.getElementById('resultsSubOnline'),
     leaderboardOnline: document.getElementById('leaderboardOnline'),
     backToMenuBtn: document.getElementById('backToMenuBtn'),
@@ -254,19 +288,26 @@
   el.startOnlineGameBtn.addEventListener('click', ()=>{
     if(!online.isHost || !online.lastRoomSnapshot) return;
     const room = online.lastRoomSnapshot;
-    const names = room.players ? Object.keys(room.players).sort().map(k=>room.players[k].name) : [];
-    if(names.length !== room.numPlayers) return;
+    const keys = room.players ? Object.keys(room.players).sort() : [];
+    if(keys.length !== room.numPlayers) return;
+    const nameOf = k => room.players[k].name;
     let units = [];
     if(room.mode === 'solo'){
-      units = names.map(n=>({ label:n, score:0 }));
+      units = keys.map(k=>({ label:nameOf(k), score:0, memberIds:[k], turnsPlayed:0 }));
     } else {
-      for(let i=0;i<names.length;i+=2){
-        units.push({ label:`${names[i]} & ${names[i+1]}`, score:0 });
+      for(let i=0;i<keys.length;i+=2){
+        units.push({
+          label:`${nameOf(keys[i])} & ${nameOf(keys[i+1])}`,
+          score:0,
+          memberIds:[keys[i], keys[i+1]],
+          turnsPlayed:0
+        });
       }
     }
     const game = {
       units, currentIndex:0, askerIndex:0, turnCount:1,
-      lastCategoryIndex:null, revealVisible:false, wheelRotation:0, spinSeed:0
+      lastCategoryIndex:null, revealVisible:false, wheelRotation:0, spinSeed:0,
+      phase:'spinning'
     };
     db.ref('rooms/' + online.roomCode).update({ status:'playing', game });
   });
@@ -362,7 +403,10 @@
       document.body.classList.toggle('is-guest', !online.isHost);
       renderOnlineGame(room);
       FF.showScreen('onlineGame');
+      if(online.isHost && !online.hostTickTimer) startHostTick();
     } else if(room.status === 'finished'){
+      stopHostTick();
+      stopTimerLoop();
       renderOnlineResults(room);
       FF.showScreen('onlineResults');
     }
@@ -437,8 +481,9 @@
       online.lastSpinSeed = game.spinSeed || 0;
     }
 
-    // spin button (host only, cosmetically)
-    el.spinBtnOnline.disabled = !online.isHost || online.hostSpinInProgress || game.revealVisible;
+    // spin button — only live while the round is idle
+    const phase = game.phase || 'spinning';
+    el.spinBtnOnline.disabled = !online.isHost || online.hostSpinInProgress || phase !== 'spinning';
     el.spinBtnOnline.textContent = online.hostSpinInProgress ? 'Spinning…' : '🎡 Spin for a category';
 
     // category reveal
@@ -447,19 +492,13 @@
       el.revealIconOnline.textContent = cat.icon;
       el.revealNameOnline.textContent = cat.name;
       el.revealDescOnline.textContent = cat.desc;
-      if(mode === 'solo'){
-        const asker = game.units[game.askerIndex];
-        const guesser = game.units[1 - game.askerIndex];
-        el.revealHintOnline.textContent = `📇 ${asker.label} draws a card & answers honestly — ${guesser.label} writes a guess`;
-        el.matchBtnOnline.textContent = `✅ ${guesser.label} guessed right (+1)`;
-      } else {
-        el.revealHintOnline.textContent = '📇 Draw a card from this category & ask away';
-        el.matchBtnOnline.textContent = "✅ It's a Match (+1)";
-      }
+      el.revealHintOnline.textContent = '📇 Draw a card from this category';
       el.categoryRevealOnline.classList.remove('hidden');
     } else {
       el.categoryRevealOnline.classList.add('hidden');
     }
+
+    renderRound(room);
   }
 
   el.spinBtnOnline.addEventListener('click', ()=>{
@@ -491,43 +530,251 @@
     });
 
     setTimeout(()=>{
-      db.ref('rooms/' + online.roomCode + '/game').update({ revealVisible:true });
+      const snap = online.lastRoomSnapshot;
+      const g = snap && snap.game;
+      if(!g){ online.hostSpinInProgress = false; return; }
+      db.ref('rooms/' + online.roomCode + '/game').update({
+        revealVisible: true,
+        phase: 'answering',
+        round: buildRound(snap, g)
+      });
       online.hostSpinInProgress = false;
     }, 4300);
   });
 
-  function resolveOnlineTurn(isMatch){
+  // ============================================================
+  //  ROUND FLOW  —  answer -> 15s guess -> verdict -> host override
+  // ============================================================
+
+  const GUESS_SECONDS = 15;
+
+  function serverNow(){ return Date.now() + (online.serverOffset || 0); }
+
+  function myPlayerId(){
+    return online.isHost ? online.hostPlayerId : online.playerId;
+  }
+
+  function playerName(room, id){
+    return (room && room.players && room.players[id] && room.players[id].name) || 'Someone';
+  }
+
+  // Decide who answers and who guesses this turn.
+  function buildRound(room, game){
+    const units = game.units || [];
+    let answererId = null, guesserId = null;
+    if(room.mode === 'solo'){
+      const a = units[game.askerIndex] || {};
+      const g = units[1 - game.askerIndex] || {};
+      answererId = (a.memberIds || [])[0] || null;
+      guesserId  = (g.memberIds || [])[0] || null;
+    } else {
+      const u = units[game.currentIndex] || {};
+      const ids = u.memberIds || [];
+      const slot = (u.turnsPlayed || 0) % 2;   // pair members alternate
+      answererId = ids[slot] || null;
+      guesserId  = ids[1 - slot] || null;
+    }
+    return { answererId, guesserId, answer:'', guess:'', deadline:0, verdict:'', reason:'', timedOut:false };
+  }
+
+  // ---------- host-side round driver ----------
+  function startHostTick(){
+    stopHostTick();
+    online.hostTickTimer = setInterval(hostTick, 300);
+  }
+  function stopHostTick(){
+    if(online.hostTickTimer){ clearInterval(online.hostTickTimer); online.hostTickTimer = null; }
+  }
+
+  function hostTick(){
     if(!online.isHost) return;
     const room = online.lastRoomSnapshot;
-    if(!room || !room.game) return;
+    if(!room || room.status !== 'playing' || !room.game) return;
     const game = room.game;
-    const units = game.units.map(u=>({ ...u }));
+    const r = game.round;
+    if(!r) return;
+    const seed = game.spinSeed || 0;
+    const base = 'rooms/' + online.roomCode + '/game';
 
-    let toastMsg;
-    if(room.mode === 'solo'){
-      const guesserIndex = 1 - game.askerIndex;
-      if(isMatch){ units[guesserIndex].score += 1; toastMsg = `✅ Point for ${units[guesserIndex].label}!`; }
-      else toastMsg = '❌ No match — card goes to the bottom of the deck';
-    } else {
-      if(isMatch){ units[game.currentIndex].score += 1; toastMsg = `✅ Point for ${units[game.currentIndex].label}!`; }
-      else toastMsg = '❌ No match — card goes to the bottom of the deck';
-    }
-    FF.showToast(toastMsg);
-    db.ref('rooms/' + online.roomCode + '/game/units').set(units);
-    el.spinBtnOnline.disabled = true;
-
-    setTimeout(()=>{
-      const updates = { revealVisible:false, turnCount:(game.turnCount||1) + 1 };
-      if(room.mode === 'solo'){
-        updates.askerIndex = 1 - game.askerIndex;
-      } else {
-        updates.currentIndex = (game.currentIndex + 1) % units.length;
+    if(game.phase === 'answering'){
+      if(r.answer){
+        db.ref(base).update({ phase:'guessing', 'round/deadline': serverNow() + GUESS_SECONDS*1000 });
       }
-      db.ref('rooms/' + online.roomCode + '/game').update(updates);
-    }, 900);
+    } else if(game.phase === 'guessing'){
+      if(online.judgingSeed === seed) return;      // already judged this round
+      if(r.guess){
+        online.judgingSeed = seed;
+        judgeRound(r.answer, r.guess, false);
+      } else if(r.deadline && serverNow() > r.deadline + 400){
+        online.judgingSeed = seed;
+        judgeRound(r.answer, '', true);
+      }
+    }
   }
-  el.matchBtnOnline.addEventListener('click', ()=> resolveOnlineTurn(true));
-  el.noMatchBtnOnline.addEventListener('click', ()=> resolveOnlineTurn(false));
+
+  function judgeRound(answer, guess, timedOut){
+    let res;
+    if(timedOut){
+      res = { verdict:'no', score:0, reason:'time ran out' };
+    } else if(window.FFCheck){
+      res = window.FFCheck.compare(answer, guess);
+    } else {
+      res = { verdict:'no', score:0, reason:'checker unavailable' };
+    }
+    db.ref('rooms/' + online.roomCode + '/game').update({
+      phase:'judging',
+      'round/verdict': res.verdict,
+      'round/reason': res.reason,
+      'round/timedOut': !!timedOut
+    });
+    if(res.verdict === 'match'){
+      setTimeout(()=> resolveRound(true), 1800);   // auto-award a clean match
+    }
+  }
+
+  function resolveRound(award){
+    if(!online.isHost) return;
+    const room = online.lastRoomSnapshot;
+    if(!room || !room.game || room.game.phase !== 'judging') return;
+    const game = room.game;
+    const units = (game.units || []).map(u=>({ ...u }));
+
+    const scoringIndex = room.mode === 'solo' ? (1 - game.askerIndex) : game.currentIndex;
+    if(award && units[scoringIndex]){
+      units[scoringIndex].score = (units[scoringIndex].score || 0) + 1;
+      FF.showToast(`\u2705 Point for ${units[scoringIndex].label}!`);
+    } else {
+      FF.showToast('\u274c No point this round');
+    }
+
+    const activeIndex = room.mode === 'solo' ? game.askerIndex : game.currentIndex;
+    if(units[activeIndex]) units[activeIndex].turnsPlayed = (units[activeIndex].turnsPlayed || 0) + 1;
+
+    const updates = {
+      units,
+      phase:'spinning',
+      revealVisible:false,
+      round:null,
+      turnCount:(game.turnCount || 1) + 1
+    };
+    if(room.mode === 'solo') updates.askerIndex = 1 - game.askerIndex;
+    else updates.currentIndex = (game.currentIndex + 1) % units.length;
+
+    db.ref('rooms/' + online.roomCode + '/game').update(updates);
+  }
+
+  // ---------- rendering ----------
+  function renderRound(room){
+    const game = room.game;
+    const phase = game.phase || 'spinning';
+    const r = game.round || {};
+    const seed = game.spinSeed || 0;
+    const me = myPlayerId();
+    const isAnswerer = !!me && r.answererId === me;
+    const isGuesser  = !!me && r.guesserId  === me;
+
+    // wipe the inputs whenever a new round starts
+    if(seed !== online.lastRoundSeed){
+      online.lastRoundSeed = seed;
+      el.answerInput.value = '';
+      el.guessInput.value = '';
+      el.submitAnswerBtn.disabled = false;
+      el.submitGuessBtn.disabled = false;
+    }
+
+    el.roundAnswering.classList.toggle('hidden', phase !== 'answering');
+    el.roundGuessing.classList.toggle('hidden',  phase !== 'guessing');
+    el.roundJudging.classList.toggle('hidden',   phase !== 'judging');
+
+    if(phase === 'answering'){
+      const who = playerName(room, r.answererId);
+      if(isAnswerer){
+        el.answeringStatus.innerHTML = '\u270d\ufe0f Your turn \u2014 type the <b>real answer</b>. Keep it secret.';
+        el.answerInputWrap.classList.remove('hidden');
+      } else {
+        el.answeringStatus.innerHTML = `\u23f3 Waiting for <b>${who}</b> to write the real answer\u2026`;
+        el.answerInputWrap.classList.add('hidden');
+      }
+    }
+
+    if(phase === 'guessing'){
+      const who = playerName(room, r.guesserId);
+      if(isGuesser){
+        el.guessingStatus.innerHTML = '\U0001f914 Your turn \u2014 what did they say?';
+        el.guessInputWrap.classList.remove('hidden');
+        if(document.activeElement !== el.guessInput) el.guessInput.focus();
+      } else {
+        el.guessingStatus.innerHTML = `\u23f3 <b>${who}</b> is guessing\u2026`;
+        el.guessInputWrap.classList.add('hidden');
+      }
+      startTimerLoop(r.deadline || 0);
+    } else {
+      stopTimerLoop();
+    }
+
+    if(phase === 'judging'){
+      el.judgeReal.textContent  = r.answer || '\u2014';
+      el.judgeGuess.textContent = r.timedOut ? '(no answer in time)' : (r.guess || '\u2014');
+
+      const v = r.verdict || 'no';
+      el.verdictBadge.className = 'verdict-badge is-' + v;
+      el.verdictBadge.textContent =
+        v === 'match' ? '\u2705 Match \u2014 point awarded' :
+        v === 'close' ? '\U0001f914 Close \u2014 host decides' :
+                        '\u274c Not a match';
+      el.verdictReason.textContent = r.reason ? r.reason : '';
+      // host rules on anything that is not a clean match
+      el.hostJudgeRow.classList.toggle('hidden', v === 'match');
+    }
+  }
+
+  // ---------- countdown ----------
+  function startTimerLoop(deadline){
+    stopTimerLoop();
+    if(!deadline) return;
+    const tick = ()=>{
+      const left = Math.max(0, deadline - serverNow());
+      const secs = Math.ceil(left / 1000);
+      el.timerNum.textContent = secs;
+      const pct = Math.max(0, Math.min(100, (left / (GUESS_SECONDS*1000)) * 100));
+      el.timerBar.style.width = pct + '%';
+      el.timerBar.classList.toggle('warn', left <= 5000);
+      if(left <= 0) stopTimerLoop();
+    };
+    tick();
+    online.timerLoop = setInterval(tick, 200);
+  }
+  function stopTimerLoop(){
+    if(online.timerLoop){ clearInterval(online.timerLoop); online.timerLoop = null; }
+  }
+
+  // ---------- input handlers ----------
+  function submitAnswer(){
+    const room = online.lastRoomSnapshot;
+    if(!room || !room.game || room.game.phase !== 'answering') return;
+    const val = el.answerInput.value.trim();
+    if(!val){ FF.showToast('Type an answer first'); return; }
+    el.submitAnswerBtn.disabled = true;
+    db.ref('rooms/' + online.roomCode + '/game/round/answer').set(val)
+      .catch(()=>{ el.submitAnswerBtn.disabled = false; });
+  }
+  el.submitAnswerBtn.addEventListener('click', submitAnswer);
+  el.answerInput.addEventListener('keydown', e=>{ if(e.key === 'Enter') submitAnswer(); });
+
+  function submitGuess(){
+    const room = online.lastRoomSnapshot;
+    if(!room || !room.game || room.game.phase !== 'guessing') return;
+    const val = el.guessInput.value.trim();
+    if(!val){ FF.showToast('Type a guess first'); return; }
+    el.submitGuessBtn.disabled = true;
+    db.ref('rooms/' + online.roomCode + '/game/round/guess').set(val)
+      .catch(()=>{ el.submitGuessBtn.disabled = false; });
+  }
+  el.submitGuessBtn.addEventListener('click', submitGuess);
+  el.guessInput.addEventListener('keydown', e=>{ if(e.key === 'Enter') submitGuess(); });
+
+  el.acceptAnswerBtn.addEventListener('click', ()=> resolveRound(true));
+  el.rejectAnswerBtn.addEventListener('click', ()=> resolveRound(false));
 
   el.endGameOnlineBtn.addEventListener('click', ()=>{
     if(!online.isHost) return;

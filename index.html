@@ -154,9 +154,44 @@
         <h3 id="revealNameOnline">Category</h3>
         <p id="revealDescOnline">Description</p>
         <div class="hint" id="revealHintOnline">📇 Draw a card from this category & ask away</div>
-        <div class="verdict-row host-only">
-          <button class="btn full" id="matchBtnOnline">✅ It's a Match (+1)</button>
-          <button class="btn ghost full" id="noMatchBtnOnline">❌ No Match</button>
+        <div class="round-zone" id="roundZoneOnline">
+
+          <!-- PHASE: answering -->
+          <div class="round-block hidden" id="roundAnswering">
+            <p class="round-status" id="answeringStatus">Waiting…</p>
+            <div class="answer-input hidden" id="answerInputWrap">
+              <input type="text" maxlength="40" id="answerInput" placeholder="The real answer…" autocomplete="off">
+              <button class="btn" id="submitAnswerBtn">Lock it in</button>
+            </div>
+          </div>
+
+          <!-- PHASE: guessing -->
+          <div class="round-block hidden" id="roundGuessing">
+            <div class="timer-wrap">
+              <div class="timer-bar" id="timerBar"></div>
+              <span class="timer-num" id="timerNum">15</span>
+            </div>
+            <p class="round-status" id="guessingStatus">Waiting…</p>
+            <div class="answer-input hidden" id="guessInputWrap">
+              <input type="text" maxlength="40" id="guessInput" placeholder="Your guess…" autocomplete="off">
+              <button class="btn" id="submitGuessBtn">Submit</button>
+            </div>
+          </div>
+
+          <!-- PHASE: judging -->
+          <div class="round-block hidden" id="roundJudging">
+            <div class="reveal-pair">
+              <div class="reveal-line"><span>Real answer</span><b id="judgeReal">—</b></div>
+              <div class="reveal-line"><span>Guess</span><b id="judgeGuess">—</b></div>
+            </div>
+            <div class="verdict-badge" id="verdictBadge">—</div>
+            <p class="verdict-reason" id="verdictReason"></p>
+            <div class="verdict-row host-only hidden" id="hostJudgeRow">
+              <button class="btn full" id="acceptAnswerBtn">✅ Accept (+1)</button>
+              <button class="btn ghost full" id="rejectAnswerBtn">❌ Reject</button>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -242,6 +277,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="firebase-config.js" defer></script>
+<script src="answer-check.js" defer></script>
 <script src="script.js" defer></script>
 <script src="online.js" defer></script>
 <script src="music.js" defer></script>
