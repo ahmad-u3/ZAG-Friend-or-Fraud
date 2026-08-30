@@ -83,6 +83,16 @@
     online.roomListener = null;
   }
 
+  // Clears only the per-game flags — the room, role and session all survive.
+  function resetRoundLocalState(){
+    stopTimerLoop();
+    online.judgingSeed = -1;
+    online.lastRoundSeed = -1;
+    online.spinResolvedSeed = -1;
+    online.hostSpinInProgress = false;
+    online.wheelInitialized = false;
+  }
+
   function resetOnlineLocalState(){
     detachRoomListener();
     stopHostTick();
@@ -151,6 +161,9 @@
     judgeTimerNum: document.getElementById('judgeTimerNum'),
     spectatorNote: document.getElementById('spectatorNote'),
     skipRoundBtn: document.getElementById('skipRoundBtn'),
+    recapWrap: document.getElementById('recapWrap'),
+    recapList: document.getElementById('recapList'),
+    rematchBtn: document.getElementById('rematchBtn'),
     acceptAnswerBtn: document.getElementById('acceptAnswerBtn'),
     rejectAnswerBtn: document.getElementById('rejectAnswerBtn'),
     resultsSubOnline: document.getElementById('resultsSubOnline'),
@@ -455,6 +468,9 @@
     online.lastRoomSnapshot = room;
 
     if(room.status === 'lobby'){
+      stopHostTick();
+      resetRoundLocalState();
+      document.body.classList.remove('is-guest');
       renderLobby(room);
       if(online.isHost){
         el.roomCodeDisplay.textContent = online.roomCode;
@@ -472,6 +488,7 @@
     } else if(room.status === 'finished'){
       stopHostTick();
       stopTimerLoop();
+      document.body.classList.toggle('is-guest', !online.isHost);
       renderOnlineResults(room);
       FF.showScreen('onlineResults');
     }
@@ -624,6 +641,7 @@
   const JUDGE_SECONDS = 15;   // how long the host has to accept or reject
   const SPIN_MS = 4300;       // wheel animation length
   const STALL_MS = 15000;     // how long before the host may skip a stalled round
+  const HISTORY_MAX = 80;     // keep the room small; a long game still fits
 
   function serverNow(){ return Date.now() + (online.serverOffset || 0); }
 
@@ -774,8 +792,26 @@
     const activeIndex = room.mode === 'solo' ? game.askerIndex : game.currentIndex;
     if(units[activeIndex]) units[activeIndex].turnsPlayed = (units[activeIndex].turnsPlayed || 0) + 1;
 
+    // keep the round for the end-of-game recap (skips aren't worth remembering)
+    const r = game.round || {};
+    const history = Array.isArray(game.history) ? game.history.slice() : [];
+    if(!force && (r.answer || r.guess)){
+      history.push({
+        cat: game.lastCategoryIndex == null ? -1 : game.lastCategoryIndex,
+        unit: (units[scoringIndex] && units[scoringIndex].label) || '',
+        answerer: playerName(room, r.answererId),
+        guesser: playerName(room, r.guesserId),
+        answer: r.answer || '',
+        guess: r.timedOut ? '' : (r.guess || ''),
+        timedOut: !!r.timedOut,
+        awarded: !!award
+      });
+      while(history.length > HISTORY_MAX) history.shift();
+    }
+
     const updates = {
       units,
+      history,
       phase:'spinning',
       phaseAt: serverNow(),
       revealVisible:false,
@@ -959,6 +995,39 @@
       ? (winners.length>1 ? `It's a tie between ${winners.join(' and ')}!` : `${winners[0]} knows their people best!`)
       : 'No points scored this round — rematch?';
     if(winners.length && FF.launchConfetti) FF.launchConfetti();
+    renderRecap(room);
+  }
+
+  // Escape anything a player typed — it goes into innerHTML below.
+  function esc(v){
+    return (v == null ? '' : String(v))
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function renderRecap(room){
+    const history = (room.game && Array.isArray(room.game.history)) ? room.game.history : [];
+    el.recapList.innerHTML = '';
+    if(!history.length){ el.recapWrap.classList.add('hidden'); return; }
+    el.recapWrap.classList.remove('hidden');
+
+    history.forEach((h, i)=>{
+      const cat = CATEGORIES[h.cat] || { icon:'❔' };
+      const row = document.createElement('div');
+      row.className = 'recap-row' + (h.awarded ? ' hit' : ' miss');
+      const guessText = h.timedOut
+        ? '<i class="recap-none">ran out of time</i>'
+        : `<b>${esc(h.guess)}</b>`;
+      row.innerHTML =
+        `<div class="recap-top">
+           <span class="recap-cat">${cat.icon}</span>
+           <span class="recap-n">Round ${i+1}</span>
+           <span class="recap-mark">${h.awarded ? '✅' : '❌'}</span>
+         </div>
+         <p class="recap-line">${esc(h.answerer)} said <b>${esc(h.answer)}</b></p>
+         <p class="recap-line">${esc(h.guesser)} guessed ${guessText}</p>`;
+      el.recapList.appendChild(row);
+    });
   }
   window.addEventListener('pagehide', ()=>{
     if(online.isHost && online.roomCode && online.lastRoomSnapshot
@@ -967,6 +1036,14 @@
       navigator.sendBeacon(url, JSON.stringify(null));
     }
   });
+  el.rematchBtn.addEventListener('click', ()=>{
+    if(!online.isHost || !online.roomCode) return;
+    el.rematchBtn.disabled = true;
+    db.ref('rooms/' + online.roomCode).update({ status:'lobby', game:null })
+      .catch(()=> FF.showToast('Could not restart — try again'))
+      .finally(()=>{ el.rematchBtn.disabled = false; });
+  });
+
   el.backToMenuBtn.addEventListener('click', ()=>{
     if(online.isHost && online.roomCode){
       db.ref('rooms/' + online.roomCode).remove().catch(()=>{});

@@ -32,7 +32,7 @@
 <link rel="icon" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=5">
+<link rel="stylesheet" href="styles.css?v=7">
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 </head>
@@ -252,7 +252,15 @@
     <h1 class="display">Results are in!</h1>
     <p class="sub" id="resultsSubOnline">Here's who really knows who.</p>
     <div class="leaderboard" id="leaderboardOnline"></div>
-    <button class="btn full" id="backToMenuBtn">↺ Back to Menu</button>
+
+    <div class="recap hidden" id="recapWrap">
+      <h2 class="recap-h2">Round by round</h2>
+      <div class="recap-list" id="recapList"></div>
+    </div>
+
+    <button class="btn full host-only" id="rematchBtn" style="margin-bottom:10px;">🔁 Play Again — same players</button>
+    <p class="sub host-hide" id="rematchNote" style="text-align:center;margin:0 0 10px;font-size:12px;">Waiting to see if the host starts another round…</p>
+    <button class="btn ghost full" id="backToMenuBtn">↺ Back to Menu</button>
   </section>
 
   <!-- SCREEN 1 (offline): how many players -->
@@ -322,10 +330,10 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="firebase-config.js?v=5" defer></script>
-<script src="answer-check.js?v=5" defer></script>
-<script src="script.js?v=5" defer></script>
-<script src="online.js?v=5" defer></script>
-<script src="music.js?v=5" defer></script>
+<script src="firebase-config.js?v=7" defer></script>
+<script src="answer-check.js?v=7" defer></script>
+<script src="script.js?v=7" defer></script>
+<script src="online.js?v=7" defer></script>
+<script src="music.js?v=7" defer></script>
 </body>
 </html>

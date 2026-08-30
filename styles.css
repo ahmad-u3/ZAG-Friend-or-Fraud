@@ -756,3 +756,59 @@
     color:var(--coral);
     letter-spacing:.03em;
   }
+
+  /* ---------- end-of-game recap ---------- */
+  .recap{ margin:4px 0 20px; text-align:left; }
+  .recap-h2{
+    font-family:'Archivo Black',sans-serif;
+    text-transform:uppercase;
+    font-size:14px;
+    color:var(--navy);
+    margin:0 0 10px;
+    text-align:center;
+  }
+  .recap-list{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    max-height:320px;
+    overflow-y:auto;
+    padding-right:2px;
+  }
+  .recap-row{
+    border:2.5px solid var(--line);
+    border-radius:14px;
+    padding:10px 12px;
+    background:var(--paper);
+  }
+  .recap-row.hit{ background:var(--lime-pale); }
+  .recap-row.miss{ background:var(--paper); }
+  .recap-top{
+    display:flex; align-items:center; gap:8px;
+    margin-bottom:6px;
+  }
+  .recap-cat{ font-size:15px; }
+  .recap-n{
+    flex:1;
+    font-family:'Archivo Black',sans-serif;
+    font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--navy-2);
+  }
+  .recap-mark{ font-size:14px; }
+  .recap-line{
+    margin:0;
+    font-size:12px;
+    font-weight:500;
+    line-height:1.5;
+    color:var(--navy-2);
+    word-break:break-word;
+  }
+  .recap-line b{ color:var(--navy); font-weight:700; }
+  .recap-none{ color:var(--coral); font-style:normal; font-weight:700; }
+
+  @media (max-width:430px){
+    .recap-list{ max-height:280px; }
+    .recap-line{ font-size:11.5px; }
+  }
