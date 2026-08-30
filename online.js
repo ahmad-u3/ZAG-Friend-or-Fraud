@@ -41,7 +41,10 @@
     timerLoop: null,
     judgingSeed: -1,
     lastRoundSeed: -1,
-    spinResolvedSeed: -1
+    spinResolvedSeed: -1,
+    presenceRef: null,
+    connectedRef: null,
+    connectedHandler: null
   };
 
   function randomId(){
@@ -84,6 +87,7 @@
     detachRoomListener();
     stopHostTick();
     stopTimerLoop();
+    stopPresence();
     online.judgingSeed = -1;
     online.lastRoundSeed = -1;
     online.spinResolvedSeed = -1;
@@ -146,6 +150,7 @@
     judgeTimerBar: document.getElementById('judgeTimerBar'),
     judgeTimerNum: document.getElementById('judgeTimerNum'),
     spectatorNote: document.getElementById('spectatorNote'),
+    skipRoundBtn: document.getElementById('skipRoundBtn'),
     acceptAnswerBtn: document.getElementById('acceptAnswerBtn'),
     rejectAnswerBtn: document.getElementById('rejectAnswerBtn'),
     resultsSubOnline: document.getElementById('resultsSubOnline'),
@@ -262,6 +267,7 @@
         el.createRoomBtn.disabled = false;
         el.createRoomBtn.textContent = 'Create Room →';
         subscribeRoom(code);
+        trackPresence();
         sweepOldRooms();
       }).catch(()=>{
         FF.showToast('Could not create room — check your Firebase setup');
@@ -313,10 +319,45 @@
     const game = {
       units, currentIndex:0, askerIndex:0, turnCount:1,
       lastCategoryIndex:null, revealVisible:false, wheelRotation:0, spinSeed:0,
-      phase:'spinning', spinAt:0
+      phase:'spinning', spinAt:0, phaseAt:0
     };
     db.ref('rooms/' + online.roomCode).update({ status:'playing', game });
   });
+
+  // ---------- presence ----------
+  // Firebase executes the onDisconnect instruction server-side, so a phone that
+  // dies or loses signal still gets marked offline without a clean goodbye.
+  function trackPresence(){
+    if(!db || !online.roomCode) return;
+    const myId = myPlayerId();
+    if(!myId) return;
+    stopPresence();
+    online.presenceRef = db.ref('rooms/' + online.roomCode + '/players/' + myId + '/online');
+    online.connectedRef = db.ref('.info/connected');
+    online.connectedHandler = snap=>{
+      if(snap.val() === false) return;
+      online.presenceRef.onDisconnect().set(false)
+        .then(()=> online.presenceRef.set(true))
+        .catch(()=>{});
+    };
+    online.connectedRef.on('value', online.connectedHandler);
+  }
+
+  function stopPresence(){
+    if(online.connectedRef && online.connectedHandler){
+      online.connectedRef.off('value', online.connectedHandler);
+    }
+    if(online.presenceRef){
+      online.presenceRef.onDisconnect().cancel().catch(()=>{});
+    }
+    online.connectedRef = null;
+    online.connectedHandler = null;
+    online.presenceRef = null;
+  }
+
+  function isOnline(room, id){
+    return !!(room && room.players && room.players[id] && room.players[id].online !== false);
+  }
 
   // ---------- join flow ----------
   // Two players sharing a name makes the lobby, scoreboard and "X is guessing…"
@@ -363,6 +404,7 @@
       online.role = 'player'; online.roomCode = code; online.playerId = ref.key; online.playerName = name; online.isHost = false;
       saveOnlineSession();
       subscribeRoom(code);
+      trackPresence();
     }).catch(err=>{
       const messages = {
         notfound:'Room not found — check the code',
@@ -447,7 +489,10 @@
       const slot = document.createElement('div');
       slot.className = 'lobby-slot ' + (filled ? 'filled' : 'empty');
       const label = filled ? (entries[i].name + (isHostSlot ? ' 🎛️ (Host)' : '')) : 'Waiting for player ' + (i+1) + '…';
-      slot.innerHTML = `<span class="dot">${filled ? '✅' : '⏳'}</span> ${label}`;
+      const live = filled && isOnline(room, entries[i].key);
+      const dot = filled ? (live ? '🟢' : '⚪') : '⏳';
+      const suffix = filled && !live ? ' <i class="slot-off">(offline)</i>' : '';
+      slot.innerHTML = `<span class="dot">${dot}</span> ${label}${suffix}`;
       listEl.appendChild(slot);
     }
     if(online.isHost){
@@ -513,7 +558,9 @@
 
     if(phase === 'spinning' && !maySpin){
       const askerId = upcomingAskerId(room, game);
-      el.spectatorNote.textContent = '⏳ ' + playerName(room, askerId) + ' spins this round…';
+      el.spectatorNote.textContent = isOnline(room, askerId)
+        ? '⏳ ' + playerName(room, askerId) + ' spins this round…'
+        : '⚠️ ' + playerName(room, askerId) + ' looks disconnected — the host can spin.';
       el.spectatorNote.classList.remove('hidden');
     } else {
       el.spectatorNote.classList.add('hidden');
@@ -576,6 +623,7 @@
   const GUESS_SECONDS = 15;
   const JUDGE_SECONDS = 15;   // how long the host has to accept or reject
   const SPIN_MS = 4300;       // wheel animation length
+  const STALL_MS = 15000;     // how long before the host may skip a stalled round
 
   function serverNow(){ return Date.now() + (online.serverOffset || 0); }
 
@@ -636,6 +684,14 @@
     const seed = game.spinSeed || 0;
     const base = 'rooms/' + online.roomCode + '/game';
 
+    // a stalled room pushes no snapshots, so re-check the skip button here
+    if(game.phase === 'answering'){
+      const ar = game.round || {};
+      const stalled = !isOnline(room, ar.answererId) ||
+                      (game.phaseAt && serverNow() - game.phaseAt > STALL_MS);
+      el.skipRoundBtn.classList.toggle('hidden', !stalled);
+    }
+
     // a spin finished animating -> open the answering phase
     if(game.phase === 'spinning'){
       if(game.spinAt && serverNow() > game.spinAt + SPIN_MS && online.spinResolvedSeed !== seed){
@@ -643,6 +699,7 @@
         db.ref(base).update({
           revealVisible: true,
           phase: 'answering',
+          phaseAt: serverNow(),
           round: buildRound(room, game)
         });
       }
@@ -698,10 +755,11 @@
     }
   }
 
-  function resolveRound(award){
+  function resolveRound(award, force){
     if(!online.isHost) return;
     const room = online.lastRoomSnapshot;
-    if(!room || !room.game || room.game.phase !== 'judging') return;
+    if(!room || !room.game) return;
+    if(!force && room.game.phase !== 'judging') return;
     const game = room.game;
     const units = (game.units || []).map(u=>({ ...u }));
 
@@ -710,7 +768,7 @@
       units[scoringIndex].score = (units[scoringIndex].score || 0) + 1;
       FF.showToast(`✅ Point for ${units[scoringIndex].label}!`);
     } else {
-      FF.showToast('❌ No point this round');
+      FF.showToast(force ? '⏭️ Round skipped' : '❌ No point this round');
     }
 
     const activeIndex = room.mode === 'solo' ? game.askerIndex : game.currentIndex;
@@ -719,6 +777,7 @@
     const updates = {
       units,
       phase:'spinning',
+      phaseAt: serverNow(),
       revealVisible:false,
       round:null,
       turnCount:(game.turnCount || 1) + 1
@@ -754,13 +813,22 @@
 
     if(phase === 'answering'){
       const who = playerName(room, r.answererId);
+      const live = isOnline(room, r.answererId);
       if(isAnswerer){
         el.answeringStatus.innerHTML = '✍️ Your turn — type the <b>real answer</b>. Keep it secret.';
         el.answerInputWrap.classList.remove('hidden');
+      } else if(!live){
+        el.answeringStatus.innerHTML = `⚠️ <b>${who}</b> looks disconnected.`;
+        el.answerInputWrap.classList.add('hidden');
       } else {
         el.answeringStatus.innerHTML = `⏳ Waiting for <b>${who}</b> to write the real answer…`;
         el.answerInputWrap.classList.add('hidden');
       }
+      // the host can bail out of a round nobody can finish
+      const stalled = !live || (game.phaseAt && serverNow() - game.phaseAt > STALL_MS);
+      el.skipRoundBtn.classList.toggle('hidden', !(online.isHost && stalled));
+    } else {
+      el.skipRoundBtn.classList.add('hidden');
     }
 
     if(phase === 'guessing'){
@@ -769,6 +837,9 @@
         el.guessingStatus.innerHTML = '🤔 Your turn — what did they say?';
         el.guessInputWrap.classList.remove('hidden');
         if(document.activeElement !== el.guessInput) el.guessInput.focus();
+      } else if(!isOnline(room, r.guesserId)){
+        el.guessingStatus.innerHTML = `⚠️ <b>${who}</b> looks disconnected — the timer will run out.`;
+        el.guessInputWrap.classList.add('hidden');
       } else {
         el.guessingStatus.innerHTML = `⏳ <b>${who}</b> is guessing…`;
         el.guessInputWrap.classList.add('hidden');
@@ -852,6 +923,7 @@
 
   el.acceptAnswerBtn.addEventListener('click', ()=> resolveRound(true));
   el.rejectAnswerBtn.addEventListener('click', ()=> resolveRound(false));
+  el.skipRoundBtn.addEventListener('click', ()=> resolveRound(false, true));
 
   el.endGameOnlineBtn.addEventListener('click', ()=>{
     if(!online.isHost) return;
@@ -917,6 +989,7 @@
       db.ref('rooms/' + saved.roomCode).once('value').then(snap=>{
         if(snap.exists()){
           subscribeRoom(saved.roomCode);
+          trackPresence();
         } else {
           clearOnlineSession();
           resetOnlineLocalState();
